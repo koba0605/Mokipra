@@ -88,6 +88,10 @@ save_usage(usage_data)
 current_user_plan = usage_data[user_id]["plan"]
 current_daily_usage = usage_data[user_id]["count"]
 
+# 決済URLの設定
+PRO_PLAN_URL = "https://buy.stripe.com/fZu4gsfr3ez826F7CEaVa00"
+MAX_PLAN_URL = "https://buy.stripe.com/dRm14g3Il3UubHf9KMaVa01"
+
 # ====================================================
 # 🎨 カスタムCSS
 # ====================================================
@@ -144,8 +148,8 @@ with st.sidebar:
 # ====================================================
 if current_daily_usage >= current_limit and not st.session_state.setup_complete:
     st.error("⚠️ 本日の面接練習回数の上限に達しました。明日リセットされます。")
-    st.link_button("💎 Proプラン(480円)に登録", "https://stripe.com/jp", use_container_width=True)
-    st.link_button("🔥 Maxプラン(980円)に登録", "https://stripe.com/jp", use_container_width=True)
+    st.link_button("💎 Proプラン(480円)に登録", PRO_PLAN_URL, use_container_width=True)
+    st.link_button("🔥 Maxプラン(980円)に登録", MAX_PLAN_URL, use_container_width=True)
 
 elif not st.session_state.setup_complete:
     st.markdown("""
@@ -364,7 +368,7 @@ else:
             
             if current_user_plan == "Free":
                 st.warning("💡 Proプランに登録すると、あなたの回答をプロが添削した「模範解答」が見られるようになります！")
-                st.link_button("💎 Proプランにアップグレード", "https://stripe.com/jp", use_container_width=True)
+                st.link_button("💎 Proプランにアップグレード", PRO_PLAN_URL, use_container_width=True)
 
             st.markdown('</div>', unsafe_allow_html=True)
 
