@@ -1,3 +1,4 @@
 streamlit
 openai
 streamlit-cookies-controller
+streamlit-mic-recorder
