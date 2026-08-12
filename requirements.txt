@@ -4,3 +4,4 @@ streamlit-cookies-controller
 streamlit-mic-recorder
 streamlit-lottie
 streamlit-option-menu
+PyPDF2==3.0.1
