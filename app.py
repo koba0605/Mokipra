@@ -14,35 +14,29 @@ from datetime import date, datetime
 # ==============================================================================
 st.set_page_config(page_title="Mokipra - AI模擬面接パートナー", page_icon="✨", layout="wide")
 
-# Clientの初期化 (Secretsや環境変数からAPIキーを取得)
 client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", os.environ.get("OPENAI_API_KEY", "")))
 
 # ==============================================================================
-# 🚧 【方法A：一時停止用】Stripe審査・開発中メンテナンス画面
-# ※ 本番運用時に機能を有効化したい場合は、以下の `st.stop()` 行をコメントアウト（#）してください
+# 🚧 【一時停止用】Stripe審査・開発中メンテナンス画面
+# ※ 本番公開時にAI機能を動かす際は、以下の `st.stop()` 行をコメントアウト（#）または削除してください
 # ==============================================================================
 st.title("✨ Mokipra")
 st.warning("🚧 現在、システム連携およびサービス準備中のため一時公開を停止しております。正式リリースをお待ちください！")
 st.info("💡 Stripe審査・システムテスト用のプレビューページです。API通信は安全に停止されています。")
 
-st.stop()  # ここでアプリの実行を完全停止（API消費0円・無駄なリソース消費を防止）
+st.stop()
 # ==============================================================================
-
 
 # ====================================================
 # 🍪 クッキー ＆ ユーザー識別管理
 # ====================================================
 controller = CookieController()
 
-# クッキーからユーザーIDを取得。なければ新規発行して保存
 user_id = controller.get('mokipra_user_id')
 if not user_id:
     user_id = str(uuid.uuid4())
     controller.set('mokipra_user_id', user_id)
 
-# ====================================================
-# 📂 データベース（JSON）関数
-# ====================================================
 HISTORY_FILE = "history.json"
 USAGE_FILE = "usage_db.json"
 
@@ -60,7 +54,6 @@ def save_history(score, context, date_str):
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
-# --- ユーザーごとの利用回数・プラン管理 ---
 def load_usage():
     if os.path.exists(USAGE_FILE):
         with open(USAGE_FILE, "r", encoding="utf-8") as f:
@@ -71,11 +64,9 @@ def save_usage(data):
     with open(USAGE_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
-# 現在のユーザーデータを読み込み
 usage_data = load_usage()
 today_str = str(date.today())
 
-# 新規ユーザー、または日付が変わった場合のリセット処理
 if user_id not in usage_data:
     usage_data[user_id] = {"date": today_str, "count": 0, "plan": "Free"}
 elif usage_data[user_id]["date"] != today_str:
@@ -84,11 +75,9 @@ elif usage_data[user_id]["date"] != today_str:
 
 save_usage(usage_data)
 
-# 変数に現在のユーザーの情報をセット
 current_user_plan = usage_data[user_id]["plan"]
 current_daily_usage = usage_data[user_id]["count"]
 
-# 決済URLの設定
 PRO_PLAN_URL = "https://buy.stripe.com/fZu4gsfr3ez826F7CEaVa00"
 MAX_PLAN_URL = "https://buy.stripe.com/dRm14g3Il3UubHf9KMaVa01"
 
@@ -113,16 +102,36 @@ st.markdown("""
 
 st.markdown('<h1 class="app-title">✨ Mokipra - AI模擬面接パートナー</h1>', unsafe_allow_html=True)
 
-# --- チャット状態の初期化 ---
 if "setup_complete" not in st.session_state: st.session_state.setup_complete = False
 if "turn_count" not in st.session_state: st.session_state.turn_count = 0
 if "start_time" not in st.session_state: st.session_state.start_time = time.time()
 if "audio_history" not in st.session_state: st.session_state.audio_history = []
+if "ad_seen" not in st.session_state: st.session_state.ad_seen = False
 
 PLAN_LIMITS = {"Free": 1, "Pro": 10, "Max": 50}
 current_limit = PLAN_LIMITS[current_user_plan]
 TOTAL_TURNS = 4
 INTERVIEWER_IMAGE = "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=800&q=80"
+
+# --- 📢 面接終了時の広告モーダル（ダイアログ） ---
+@st.dialog("📢 スポンサーからのお知らせ")
+def show_ad_modal():
+    st.write("面接お疲れ様でした！AIが採点と評価シートを作成しています。")
+    st.markdown("""
+    <div class="ad-card" style="background: #f8fafc; border-style: solid; margin: 15px 0;">
+        <span style="font-size:28px;">📚</span><br>
+        <b style="font-size:1.1rem; color:#1e293b;">【PR】オンスク.JP - 様々な資格学習がウケホーダイ！</b><br>
+        <p style="font-size:0.85rem; color:#475569; margin-top:5px;">
+            月額1,628円で様々な資格対策が学べるオンライン学習サービス。就活・スキルのステップアップに！
+        </p>
+        <a href="https://px.a8.net/svt/ejp?a8mat=4BA41A+ABII9E+408S+5YRHE" target="_blank" style="display:inline-block; background:#2563eb; color:white; padding:8px 16px; border-radius:8px; text-decoration:none; font-weight:bold; font-size:0.85rem;">
+            詳細を見て無料で試す 🔗
+        </a>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("閉じて評価結果を見る ➔", type="primary", use_container_width=True):
+        st.session_state.ad_seen = True
+        st.rerun()
 
 # --- サイドバー ---
 with st.sidebar:
@@ -132,13 +141,12 @@ with st.sidebar:
     st.progress(current_daily_usage / current_limit if current_limit > 0 else 1.0)
     
     st.markdown("---")
-    st.link_button("📝 バグ報告・ご要望はこちら", "https://docs.google.com/forms/", use_container_width=True)
+    st.link_button("📝 バグ報告・ご要望はこちら", "https://forms.gle/uZkRncaJMA9SZw8j9", use_container_width=True)
 
     st.markdown("---")
     st.caption("🛠️ 開発者用テストパネル")
     test_plan = st.selectbox("プラン切り替え", ["Free", "Pro", "Max"])
     if st.button("適用する", use_container_width=True):
-        # テスト用にデータベースのプランを強制変更して永続化
         usage_data[user_id]["plan"] = test_plan
         save_usage(usage_data)
         st.rerun()
@@ -148,7 +156,8 @@ with st.sidebar:
 # ====================================================
 if current_daily_usage >= current_limit and not st.session_state.setup_complete:
     st.error("⚠️ 本日の面接練習回数の上限に達しました。明日リセットされます。")
-    st.link_button("💎 Proプラン(480円)に登録", PRO_PLAN_URL, use_container_width=True)
+    st.info("💡 Proプランなら1日10回まで受講可能！アドバイスを踏まえて今すぐリベンジできます！")
+    st.link_button("💎 Proプラン(480円)に登録して今すぐリベンジ", PRO_PLAN_URL, use_container_width=True)
     st.link_button("🔥 Maxプラン(980円)に登録", MAX_PLAN_URL, use_container_width=True)
 
 elif not st.session_state.setup_complete:
@@ -164,8 +173,6 @@ elif not st.session_state.setup_complete:
 
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("🚀 面接をスタートする", type="primary", use_container_width=True):
-        
-        # スタート時にデータベースの回数を+1して保存
         usage_data[user_id]["count"] += 1
         save_usage(usage_data)
 
@@ -186,6 +193,7 @@ elif not st.session_state.setup_complete:
         st.session_state.audio_history = []
         st.session_state.interview_context = interview_mode
         st.session_state.setup_complete = True
+        st.session_state.ad_seen = False
         
         with st.spinner("面接官が入室しています..."):
             response = client.chat.completions.create(
@@ -208,7 +216,7 @@ else:
     left_col, right_col = st.columns([1.3, 0.7], gap="large")
 
     with left_col:
-        tab_chat, tab_redo, tab_mypage = st.tabs(["🎙️ 面接セッション", "🔄 リトライ", "📈 マイページ (成績)"])
+        tab_chat, tab_mypage = st.tabs(["🎙️ 面接セッション", "📈 マイページ (成績)"])
 
         with tab_chat:
             st.markdown('<div class="glass-card">', unsafe_allow_html=True)
@@ -272,20 +280,6 @@ else:
                     st.session_state.start_time = time.time()
                     st.rerun()
 
-        with tab_redo:
-            st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-            if 0 < st.session_state.turn_count < TOTAL_TURNS:
-                st.info("一つ前の質疑応答を取り消して、回答をもう一度やり直すことができます。")
-                if st.button("↩️ 1つ前の質問に戻る", use_container_width=True):
-                    st.session_state.messages = st.session_state.messages[:-2]
-                    st.session_state.audio_history.pop()
-                    st.session_state.turn_count -= 1
-                    st.session_state.start_time = time.time()
-                    st.rerun()
-            else:
-                st.write("現在やり直せる回答はありません。")
-            st.markdown('</div>', unsafe_allow_html=True)
-
         with tab_mypage:
             st.markdown('<div class="glass-card">', unsafe_allow_html=True)
             st.subheader("📈 過去の面接スコア推移")
@@ -311,18 +305,11 @@ else:
         st.markdown("<br>", unsafe_allow_html=True)
         st.caption("Sponsored")
         st.markdown("""
-        <a href="#" target="_blank" style="text-decoration:none; color:inherit;">
+        <a href="https://px.a8.net/svt/ejp?a8mat=4BA41A+ABII9E+408S+5YRHE" target="_blank" style="text-decoration:none; color:inherit;">
             <div class="ad-card">
-                <span style="font-size:24px;">👔</span><br>
-                <b>【PR】優良企業オファーを獲得</b><br>
-                <span style="font-size:0.8rem; color:#64748b;">あなたに合った企業をプロが無料で紹介！</span>
-            </div>
-        </a>
-        <a href="#" target="_blank" style="text-decoration:none; color:inherit;">
-            <div class="ad-card">
-                <span style="font-size:24px;">💻</span><br>
-                <b>【PR】未経験からITエンジニアへ</b><br>
-                <span style="font-size:0.8rem; color:#64748b;">無料プログラミングスクール登録はこちら</span>
+                <span style="font-size:24px;">📚</span><br>
+                <b>【PR】各種資格がウケホーダイ！</b><br>
+                <span style="font-size:0.8rem; color:#64748b;">月額1,628円で学べるオンスク.JP</span>
             </div>
         </a>
         """, unsafe_allow_html=True)
@@ -331,49 +318,53 @@ else:
             st.markdown("---")
             st.success("🎉 面接セッション終了！")
             
-            if "final_eval" not in st.session_state:
-                with st.spinner("AIが総合アドバイスシートを作成中..."):
-                    
-                    if current_user_plan == "Free":
-                        rewrite_instruction = "・✨ プロの模範解答: 実際の模範解答は出力せず、「【🔒 Proプラン限定機能】プロによる模範解答（リライト）を確認するには、Proプラン以上の登録が必要です。」という案内文だけを記載してください。"
-                    else:
-                        rewrite_instruction = "・✨ プロの模範解答: （ユーザーの回答の中で一番惜しかったものを1つ選び、「こう答えれば完璧だった」という具体的なセリフを作成）"
+            if not st.session_state.ad_seen:
+                show_ad_modal()
+            else:
+                if "final_eval" not in st.session_state:
+                    with st.spinner("AIが総合アドバイスシートを作成中..."):
+                        if current_user_plan == "Free":
+                            rewrite_instruction = "・✨ プロの模範解答: 実際の模範解答は出力せず、「【🔒 Proプラン限定機能】プロによる模範解答（リライト）を確認するには、Proプラン以上の登録が必要です。」という案内文だけを記載してください。"
+                        else:
+                            rewrite_instruction = "・✨ プロの模範解答: （ユーザーの回答の中で一番惜しかったものを1つ選び、「こう答えれば完璧だった」という具体的なセリフを作成）"
 
-                    eval_prompt = [
-                        {"role": "system", "content": f"""
-        あなたはベテラン面接官です。面接結果として以下を出力してください。
-        必ず『総合スコア（数字のみ）』を本文の先頭に含めてください。
+                        eval_prompt = [
+                            {"role": "system", "content": f"""
+            あなたはベテラン面接官です。面接結果として以下を出力してください。
+            必ず『総合スコア（数字のみ）』を本文の先頭に含めてください。
 
-        【総合面接結果報告書】
-        ・総合スコア: 〇〇点 / 100点
-        ・良かった点 / 改善アドバイス
-        ・⏱️ 回答スピードの評価: （ユーザーの回答時間を見て評価）
-        {rewrite_instruction}
-        """}
-                    ] + st.session_state.messages[1:]
+            【総合面接結果報告書】
+            ・総合スコア: 〇〇点 / 100点
+            ・良かった点 / 改善アドバイス
+            ・⏱️ 回答スピードの評価: （ユーザーの回答時間を見て評価）
+            {rewrite_instruction}
+            """}
+                        ] + st.session_state.messages[1:]
 
-                    eval_response = client.chat.completions.create(
-                        model="gpt-4o-mini", messages=eval_prompt, temperature=0.7
-                    )
-                    eval_text = eval_response.choices[0].message.content
-                    st.session_state.final_eval = eval_text
-                    
-                    import re
-                    match = re.search(r'スコア[^\d]*(\d{1,3})', eval_text)
-                    score = int(match.group(1)) if match else 50
-                    save_history(score, st.session_state.interview_context, datetime.now().strftime("%Y-%m-%d %H:%M"))
+                        eval_response = client.chat.completions.create(
+                            model="gpt-4o-mini", messages=eval_prompt, temperature=0.7
+                        )
+                        eval_text = eval_response.choices[0].message.content
+                        st.session_state.final_eval = eval_text
+                        
+                        import re
+                        match = re.search(r'スコア[^\d]*(\d{1,3})', eval_text)
+                        score = int(match.group(1)) if match else 50
+                        save_history(score, st.session_state.interview_context, datetime.now().strftime("%Y-%m-%d %H:%M"))
 
-            st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-            st.info(st.session_state.final_eval)
-            
-            if current_user_plan == "Free":
-                st.warning("💡 Proプランに登録すると、あなたの回答をプロが添削した「模範解答」が見られるようになります！")
-                st.link_button("💎 Proプランにアップグレード", PRO_PLAN_URL, use_container_width=True)
+                st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+                st.info(st.session_state.final_eval)
+                
+                if current_user_plan == "Free":
+                    st.markdown("---")
+                    st.warning("💡 **アドバイスを踏まえて、今すぐ次の面接でリベンジしてみませんか？**\n\nProプランにアップグレードすると、**1日10回まで練習可能**＆プロの**模範解答（リライト）**が解放されます！")
+                    st.link_button("💎 Proプラン(480円)に登録して今すぐリベンジ", PRO_PLAN_URL, use_container_width=True)
 
-            st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
 
-            if st.button("🔄 新しい面接を開始する", type="primary", use_container_width=True):
-                st.session_state.setup_complete = False
-                st.session_state.turn_count = 0
-                if "final_eval" in st.session_state: del st.session_state["final_eval"]
-                st.rerun()
+                if st.button("🔄 新しい面接を開始する", type="primary", use_container_width=True):
+                    st.session_state.setup_complete = False
+                    st.session_state.turn_count = 0
+                    st.session_state.ad_seen = False
+                    if "final_eval" in st.session_state: del st.session_state["final_eval"]
+                    st.rerun()
