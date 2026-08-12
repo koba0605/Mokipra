@@ -2,3 +2,5 @@ streamlit
 openai
 streamlit-cookies-controller
 streamlit-mic-recorder
+streamlit-lottie
+streamlit-option-menu
