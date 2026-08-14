@@ -10,3 +10,4 @@ supabase
 fastapi
 uvicorn
 stripe
+python-dotenv
