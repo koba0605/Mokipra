@@ -7,3 +7,6 @@ streamlit-lottie
 requests
 PyPDF2
 supabase
+fastapi
+uvicorn
+stripe
