@@ -14,6 +14,10 @@ SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 app = FastAPI()
+# ヘルスチェック用のエンドポイント（Render死活監視用）
+@app.get("/")
+def health_check():
+    return {"status": "ok"}
 
 PLAN_WEIGHTS = {"Free": 0, "Pro": 1, "Max": 2}
 
