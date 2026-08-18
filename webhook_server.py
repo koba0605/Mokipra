@@ -14,10 +14,6 @@ SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 app = FastAPI()
-# ヘルスチェック用のエンドポイント（Render死活監視用）
-@app.get("/")
-def health_check():
-    return {"status": "ok"}
 
 PLAN_WEIGHTS = {"Free": 0, "Pro": 1, "Max": 2}
 
@@ -37,14 +33,19 @@ async def stripe_webhook(request: Request):
 
     if event['type'] == 'checkout.session.completed':
         session = event['data']['object']
-        user_id = session.get('client_reference_id')
         
-        metadata = session.get('metadata', {})
-        new_plan = metadata.get('plan')
+        # ★ 修正: .get() ではなくドット(.)でプロパティにアクセスする
+        user_id = session.client_reference_id
+        
+        # metadataもプロパティとしてアクセス。Noneの場合を考慮して .get を安全に使う
+        metadata = session.metadata
+        new_plan = metadata.get('plan') if metadata else None
 
+        # メタデータがない場合のフォールバック
         if not new_plan:
-            amount = session.get('amount_total')
-            currency = session.get('currency', 'jpy').lower()
+            amount = session.amount_total
+            currency = session.currency.lower() if session.currency else 'jpy'
+            
             if currency == 'jpy' or currency == 'usd':
                 new_plan = "Pro" if amount == 480 else "Max" if amount == 980 else "Free"
             else:
