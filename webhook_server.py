@@ -17,6 +17,11 @@ app = FastAPI()
 
 PLAN_WEIGHTS = {"Free": 0, "Pro": 1, "Max": 2}
 
+# Render死活監視用ヘルスチェック
+@app.get("/")
+def health_check():
+    return {"status": "ok"}
+
 @app.post("/webhook")
 async def stripe_webhook(request: Request):
     payload = await request.body()
@@ -34,19 +39,20 @@ async def stripe_webhook(request: Request):
     if event['type'] == 'checkout.session.completed':
         session = event['data']['object']
         
-        # ★ 修正: .get() ではなくドット(.)でプロパティにアクセスする
-        user_id = session.client_reference_id
+        # ★ 修正: getattr() を使い、Stripeオブジェクトから「安全に」値を取り出す
+        user_id = getattr(session, 'client_reference_id', None)
         
-        # metadataもプロパティとしてアクセス。Noneの場合を考慮して .get を安全に使う
-        metadata = session.metadata
-        new_plan = metadata.get('plan') if metadata else None
+        # metadataも同様に安全に取得
+        metadata = getattr(session, 'metadata', None)
+        new_plan = getattr(metadata, 'plan', None) if metadata else None
 
-        # メタデータがない場合のフォールバック
+        # メタデータがない場合のフォールバック（こちらも全て安全な取得方式に統一）
         if not new_plan:
-            amount = session.amount_total
-            currency = session.currency.lower() if session.currency else 'jpy'
+            amount = getattr(session, 'amount_total', 0)
+            currency = getattr(session, 'currency', 'jpy')
+            currency = currency.lower() if currency else 'jpy'
             
-            if currency == 'jpy' or currency == 'usd':
+            if currency in ['jpy', 'usd']:
                 new_plan = "Pro" if amount == 480 else "Max" if amount == 980 else "Free"
             else:
                 new_plan = "Free"
