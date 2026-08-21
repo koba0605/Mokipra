@@ -30,11 +30,19 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Google Search Console メタタグ
+# ===== Google Analytics =====
 st.html("""
+<!-- Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-H98Q6ZRT26"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-H98Q6ZRT26');
+</script>
+<!-- Google Search Console メタタグ -->
 <meta name="google-site-verification" content="2n0R0utRpWfk-PmJHXBoyiYdafEEyfe84CzpQK5GWDs" />
 """)
-
 # ==============================================================================
 # 1.5 緊急メンテナンススイッチ
 #    問題発生時、コードの修正・再デプロイをせずに、デプロイ先の環境変数を
