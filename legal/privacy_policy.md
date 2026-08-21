@@ -59,4 +59,4 @@ Mokipra運営事務局（以下、「当方」といいます。）は、本サ�
 Mokipra運営事務局
 mokipra.ai.official@gmail.com
 
-制定日：[2026年08月19日]
+制定日：2026年08月19日
