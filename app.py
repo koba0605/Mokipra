@@ -23,7 +23,17 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-st.set_page_config(page_title="Mokipra - AI模擬面接パートナー", page_icon="mokipra_icon_official.png", layout="wide", initial_sidebar_state="expanded",meta_tags=[{"name": "google-site-verification", "content": "2n0R0utRpWfk-PmJHXBoyiYdafEEyfe84CzpQK5GWDs"}])
+st.set_page_config(
+    page_title="Mokipra - AI模擬面接パートナー",
+    page_icon="mokipra_icon_official.png",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Google Search Console メタタグ
+st.html("""
+<meta name="google-site-verification" content="2n0R0utRpWfk-PmJHXBoyiYdafEEyfe84CzpQK5GWDs" />
+""")
 
 # ==============================================================================
 # 1.5 緊急メンテナンススイッチ
