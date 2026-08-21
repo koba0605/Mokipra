@@ -23,12 +23,8 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-st.set_page_config(page_title="Mokipra - AI模擬面接パートナー", page_icon="mokipra_icon_official.png", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Mokipra - AI模擬面接パートナー", page_icon="mokipra_icon_official.png", layout="wide", initial_sidebar_state="expanded",meta_tags=[{"name": "google-site-verification", "content": "2n0R0utRpWfk-PmJHXBoyiYdafEEyfe84CzpQK5GWDs"}])
 
-# ===== Google Search Console 確認用メタタグ =====
-st.html("""
-<meta name="google-site-verification" content="2n0R0utRpWfk-PmJHXBoyiYdafEEyfe84CzpQK5GWDs" />
-""")
 # ==============================================================================
 # 1.5 緊急メンテナンススイッチ
 #    問題発生時、コードの修正・再デプロイをせずに、デプロイ先の環境変数を
