@@ -142,13 +142,6 @@ Mokipra の開発では、以下の段階を経て現在の形になりました
 4. **セキュリティ強化** - RLS 実装、API キー管理
 5. **本番デプロイ** - Streamlit Cloud + Render での運用
 
-詳しくは、[開発プロセス](./docs/development.md) をご覧ください。
-
----
-
-## 📝 ライセンス
-
-MIT License - 詳細は [LICENSE](./LICENSE) をご覧ください。
 
 ---
 
