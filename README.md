@@ -3,6 +3,7 @@
 <div align="center">
 
 ![Mokipra](https://img.shields.io/badge/Status-Active-brightgreen)
+![License](https://img.shields.io/badge/License-MIT-blue)
 ![Python](https://img.shields.io/badge/Python-3.11+-blue)
 
 **AIが面接官になる、リアルな面接練習サービス**
@@ -141,6 +142,11 @@ Mokipra の開発では、以下の段階を経て現在の形になりました
 4. **セキュリティ強化** - RLS 実装、API キー管理
 5. **本番デプロイ** - Streamlit Cloud + Render での運用
 
+---
+
+## 📝 ライセンス
+
+MIT License - 詳細は [LICENSE](./LICENSE) をご覧ください。
 
 ---
 
