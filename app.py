@@ -41,7 +41,7 @@ st.html("""
   gtag('config', 'G-H98Q6ZRT26');
 </script>
 <!-- Google Search Console メタタグ -->
-<meta name="google-site-verification" content="2n0R0utRpWfk-PmJHXBoyiYdafEEyfe84CzpQK5GWDs" />
+<meta name="google-site-verification" content="cMyXhgjWi-eSbhos-hnseplVmYffQNnB-TQMgnJHnVM" />
 """)
 # ==============================================================================
 # 1.5 緊急メンテナンススイッチ
