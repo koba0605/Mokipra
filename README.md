@@ -3,7 +3,6 @@
 <div align="center">
 
 ![Mokipra](https://img.shields.io/badge/Status-Active-brightgreen)
-![License](https://img.shields.io/badge/License-MIT-blue)
 ![Python](https://img.shields.io/badge/Python-3.11+-blue)
 
 **AIが面接官になる、リアルな面接練習サービス**
