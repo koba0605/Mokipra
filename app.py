@@ -44,12 +44,28 @@ st.html("""
 <meta name="google-site-verification" content="2n0R0utRpWfk-PmJHXBoyiYdafEEyfe84CzpQK5GWDs" />
 """)
 # ==============================================================================
+# 1.4 シークレット取得ヘルパー
+#    st.secrets は secrets.toml が1つも存在しない環境（Render 等）では、
+#    .get() のデフォルト値を返す前に StreamlitSecretNotFoundError を送出する。
+#    そのため secrets へのアクセスを try で包み、失敗時は環境変数に委ねる。
+#    Streamlit Cloud（secrets.toml あり）では従来どおり secrets の値が優先される。
+# ==============================================================================
+def get_secret(key, default=""):
+    try:
+        value = st.secrets.get(key)
+        if value is not None:
+            return value
+    except Exception:
+        pass
+    return os.environ.get(key, default)
+
+# ==============================================================================
 # 1.5 緊急メンテナンススイッチ
 #    問題発生時、コードの修正・再デプロイをせずに、デプロイ先の環境変数を
 #    1つ変えるだけで全ユーザーへの提供を即座に止められるようにしておく。
 #    Streamlit Cloud: 「Settings」→「Secrets」に MAINTENANCE_MODE = "true" を追加
 # ==============================================================================
-MAINTENANCE_MODE = st.secrets.get("MAINTENANCE_MODE", os.environ.get("MAINTENANCE_MODE", "")).lower() == "true"
+MAINTENANCE_MODE = get_secret("MAINTENANCE_MODE", "").lower() == "true"
 
 if MAINTENANCE_MODE:
     st.warning("🔧 現在メンテナンス中です。しばらくしてから再度アクセスしてください。")
@@ -151,9 +167,9 @@ app_icon = get_icon_html("mokipra_icon_official.png")
 # ==============================================================================
 # 2. APIキーと各種クライアント設定
 # ==============================================================================
-OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", os.environ.get("OPENAI_API_KEY", ""))
-SUPABASE_URL = st.secrets.get("SUPABASE_URL", os.environ.get("SUPABASE_URL", ""))
-SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", os.environ.get("SUPABASE_KEY", ""))
+OPENAI_API_KEY = get_secret("OPENAI_API_KEY", "")
+SUPABASE_URL = get_secret("SUPABASE_URL", "")
+SUPABASE_KEY = get_secret("SUPABASE_KEY", "")
 
 # ★ 追加: 起動時のAPIキー検証。未設定のまま起動すると、後続の処理で
 #   分かりにくいエラー（AttributeErrorやAuthenticationError等）になるため、
@@ -169,8 +185,8 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     st.stop()
 
 client = OpenAI(api_key=OPENAI_API_KEY)
-ELEVENLABS_API_KEY = st.secrets.get("ELEVENLABS_API_KEY", os.environ.get("ELEVENLABS_API_KEY", ""))
-GOOGLE_TTS_API_KEY = st.secrets.get("GOOGLE_TTS_API_KEY", os.environ.get("GOOGLE_TTS_API_KEY", ""))
+ELEVENLABS_API_KEY = get_secret("ELEVENLABS_API_KEY", "")
+GOOGLE_TTS_API_KEY = get_secret("GOOGLE_TTS_API_KEY", "")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def generate_interview_audio(text: str) -> bytes:
@@ -218,10 +234,10 @@ def generate_interview_audio(text: str) -> bytes:
         fallback = client.audio.speech.create(model="tts-1", voice="onyx", input=text)
         return fallback.content
 
-stripe.api_key = st.secrets.get("STRIPE_SECRET_KEY", os.environ.get("STRIPE_SECRET_KEY", ""))
-STRIPE_PRICE_ID_PRO = st.secrets.get("STRIPE_PRICE_ID_PRO", os.environ.get("STRIPE_PRICE_ID_PRO", ""))
-STRIPE_PRICE_ID_MAX = st.secrets.get("STRIPE_PRICE_ID_MAX", os.environ.get("STRIPE_PRICE_ID_MAX", ""))
-APP_URL = st.secrets.get("APP_URL", os.environ.get("APP_URL", "http://localhost:8501"))
+stripe.api_key = get_secret("STRIPE_SECRET_KEY", "")
+STRIPE_PRICE_ID_PRO = get_secret("STRIPE_PRICE_ID_PRO", "")
+STRIPE_PRICE_ID_MAX = get_secret("STRIPE_PRICE_ID_MAX", "")
+APP_URL = get_secret("APP_URL", "http://localhost:8501")
 
 if not STRIPE_PRICE_ID_PRO or "XXX" in STRIPE_PRICE_ID_PRO:
     logger.error("Stripe Price ID (Pro) not properly configured")
@@ -387,19 +403,19 @@ def get_interview_history(uid):
         return []
 
 def create_checkout_session(user_id, plan_type):
-    api_key = st.secrets.get("STRIPE_SECRET_KEY", os.environ.get("STRIPE_SECRET_KEY", ""))
+    api_key = get_secret("STRIPE_SECRET_KEY", "")
     stripe.api_key = api_key
     
     if not stripe.api_key:
         return None, "STRIPE_SECRET_KEY が設定されていません。"
 
     prices = {
-        "Pro": st.secrets.get("STRIPE_PRICE_ID_PRO", os.environ.get("STRIPE_PRICE_ID_PRO", "")),
-        "Max": st.secrets.get("STRIPE_PRICE_ID_MAX", os.environ.get("STRIPE_PRICE_ID_MAX", "")),
+        "Pro": get_secret("STRIPE_PRICE_ID_PRO", ""),
+        "Max": get_secret("STRIPE_PRICE_ID_MAX", ""),
     }
     
     price_id = prices.get(plan_type, "")
-    current_url = st.secrets.get("APP_URL", os.environ.get("APP_URL", "http://localhost:8501"))
+    current_url = get_secret("APP_URL", "http://localhost:8501")
     
     try:
         session = stripe.checkout.Session.create(
