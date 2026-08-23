@@ -41,7 +41,7 @@ st.html("""
   gtag('config', 'G-H98Q6ZRT26');
 </script>
 <!-- Google Search Console メタタグ -->
-<meta name="google-site-verification" content="cMyXhgjWi-eSbhos-hnseplVmYffQNnB-TQMgnJHnVM" />
+<meta name="google-site-verification" content="2n0R0utRpWfk-PmJHXBoyiYdafEEyfe84CzpQK5GWDs" />
 """)
 # ==============================================================================
 # 1.5 緊急メンテナンススイッチ
@@ -219,13 +219,13 @@ def generate_interview_audio(text: str) -> bytes:
         return fallback.content
 
 stripe.api_key = st.secrets.get("STRIPE_SECRET_KEY", os.environ.get("STRIPE_SECRET_KEY", ""))
-STRIPE_PRICE_ID_PRO = st.secrets.get("STRIPE_PRICE_ID_PRO", "")
-STRIPE_PRICE_ID_MAX = st.secrets.get("STRIPE_PRICE_ID_MAX", "")
-APP_URL = st.secrets.get("APP_URL", "http://localhost:8501")
+STRIPE_PRICE_ID_PRO = st.secrets.get("STRIPE_PRICE_ID_PRO", os.environ.get("STRIPE_PRICE_ID_PRO", ""))
+STRIPE_PRICE_ID_MAX = st.secrets.get("STRIPE_PRICE_ID_MAX", os.environ.get("STRIPE_PRICE_ID_MAX", ""))
+APP_URL = st.secrets.get("APP_URL", os.environ.get("APP_URL", "http://localhost:8501"))
 
 if not STRIPE_PRICE_ID_PRO or "XXX" in STRIPE_PRICE_ID_PRO:
     logger.error("Stripe Price ID (Pro) not properly configured")
-    st.error("❌ Stripe設定エラー：Proプランの Price ID が未設定です。.streamlit/secrets.toml を確認してください。")
+    st.error("❌ Stripe設定エラー：Proプランの Price ID が未設定です。secrets.toml または環境変数 STRIPE_PRICE_ID_PRO を確認してください。")
     st.stop()
 
 if not STRIPE_PRICE_ID_MAX or "XXX" in STRIPE_PRICE_ID_MAX:
@@ -394,12 +394,12 @@ def create_checkout_session(user_id, plan_type):
         return None, "STRIPE_SECRET_KEY が設定されていません。"
 
     prices = {
-        "Pro": st.secrets.get("STRIPE_PRICE_ID_PRO", ""),
-        "Max": st.secrets.get("STRIPE_PRICE_ID_MAX", ""),
+        "Pro": st.secrets.get("STRIPE_PRICE_ID_PRO", os.environ.get("STRIPE_PRICE_ID_PRO", "")),
+        "Max": st.secrets.get("STRIPE_PRICE_ID_MAX", os.environ.get("STRIPE_PRICE_ID_MAX", "")),
     }
     
     price_id = prices.get(plan_type, "")
-    current_url = st.secrets.get("APP_URL", "http://localhost:8501")
+    current_url = st.secrets.get("APP_URL", os.environ.get("APP_URL", "http://localhost:8501"))
     
     try:
         session = stripe.checkout.Session.create(
