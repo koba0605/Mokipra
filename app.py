@@ -185,6 +185,14 @@ st.html("""
     /* --- 折りたたみ（法的情報） --- */
     [data-testid="stExpander"] { border-radius: 14px !important; border: 1px solid #cbd5e1 !important; background: rgba(255,255,255,.88) !important; overflow: hidden; box-shadow: 0 2px 10px rgba(15,23,42,.05); margin-bottom: 9px; }
     [data-testid="stExpander"] summary:hover { background: rgba(219,234,254,.5); }
+
+    /* --- スポンサーリンク（広告） --- */
+    .mkp-ad-wrap { max-width: 900px; margin: 0 auto; text-align: center; }
+    .mkp-ad-label { color: #94a3b8 !important; font-size: .68rem !important; font-weight: 700 !important; letter-spacing: .18em; text-indent: .18em; margin: 0 0 10px !important; text-transform: none; }
+    .mkp-ad-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 14px; }
+    .mkp-ad-item { display: inline-flex; align-items: center; justify-content: center; padding: 10px 14px; background: rgba(255,255,255,.72); border: 1px solid #dbe3ec; border-radius: 12px; box-shadow: 0 2px 8px rgba(15,23,42,.05); transition: transform .2s ease, box-shadow .2s ease; }
+    .mkp-ad-item:hover { transform: translateY(-3px); box-shadow: 0 8px 18px rgba(15,23,42,.10); }
+    .mkp-ad-item img { display: block; max-width: 100%; height: auto; }
     /* ============ ここまで ============ */
     </style>
 """)
@@ -502,7 +510,40 @@ if not st.session_state.user:
                     except Exception as e:
                         st.error(f"⚠️ 認証エラー: {e}")
 
-    st.markdown("<div style='height: 32px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height: 36px;'></div>", unsafe_allow_html=True)
+
+    # ====================================================
+    # 📢 スポンサーリンク（A8.net アフィリエイト広告）
+    #    景品表示法（ステルスマーケティング規制）に基づき、
+    #    広告であることが明確に分かる表示を必ず添える。
+    #    タグは A8 から発行されたものを改変せず使用する
+    #    （target="_blank" のみ、離脱防止のため付与）。
+    # ====================================================
+    _ad_a8_1 = (
+        '<a href="https://px.a8.net/svt/ejp?a8mat=4BA41B+EGCVHU+3Y9Y+ZRALD" rel="nofollow" target="_blank">'
+        '<img border="0" width="234" height="60" alt="" '
+        'src="https://www27.a8.net/svt/bgt?aid=260812271874&wid=001&eno=01&mid=s00000018439006006000&mc=1"></a>'
+        '<img border="0" width="1" height="1" '
+        'src="https://www17.a8.net/0.gif?a8mat=4BA41B+EGCVHU+3Y9Y+ZRALD" alt="">'
+    )
+    _ad_a8_2 = (
+        '<a href="https://px.a8.net/svt/ejp?a8mat=4BA41A+ABII9E+408S+601S1" rel="nofollow" target="_blank">'
+        '<img border="0" width="120" height="60" alt="" '
+        'src="https://www29.a8.net/svt/bgt?aid=260812270624&wid=001&eno=01&mid=s00000018694001008000&mc=1"></a>'
+        '<img border="0" width="1" height="1" '
+        'src="https://www11.a8.net/0.gif?a8mat=4BA41A+ABII9E+408S+601S1" alt="">'
+    )
+    _ad_html = (
+        '<div class="mkp-ad-wrap">'
+        '<p class="mkp-ad-label">スポンサーリンク</p>'
+        '<div class="mkp-ad-row">'
+        '<span class="mkp-ad-item">' + _ad_a8_1 + '</span>'
+        '<span class="mkp-ad-item">' + _ad_a8_2 + '</span>'
+        '</div></div>'
+    )
+    st.markdown(_ad_html, unsafe_allow_html=True)
+
+    st.markdown("<div style='height: 34px;'></div>", unsafe_allow_html=True)
 
     # ---- 法的情報（未ログインでも閲覧できるようにする）----
     st.markdown("""
