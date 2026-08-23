@@ -8,7 +8,7 @@
 
 **AIが面接官になる、リアルな面接練習サービス**
 
-[🚀 デモを試す](https://mokipra-app.streamlit.app) • [📖 ドキュメント](#-技術スタック) • [🐛 バグ報告](https://github.com/koba0605/Mokipra/issues)
+[🚀 デモを試す](https://mokipra.jp) • [📖 ドキュメント](#-技術スタック) • [🐛 バグ報告](https://github.com/koba0605/Mokipra/issues)
 
 </div>
 
@@ -72,7 +72,7 @@ Mokipra は、**AI が面接官になってリアルな面接練習ができる*
 
 ### デモ版で体験
 
-[**🎤 Mokipra を今すぐ試す**](https://mokipra-app.streamlit.app)
+[**🎤 Mokipra を今すぐ試す**](https://mokipra.jp)
 
 ブラウザで開いて、メールアドレスで新規登録するだけで、すぐに面接練習が開始できます。
 
