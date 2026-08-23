@@ -151,6 +151,41 @@ st.html("""
     .status-badge { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white !important; padding: 8px 16px; border-radius: 30px; font-weight: bold; font-size: 0.9rem; display: inline-block; }
     .feature-badge { background: #e0f2fe; color: #0369a1 !important; padding: 4px 10px; border-radius: 8px; font-size: 0.85rem; font-weight: bold; margin-right: 6px; }
     [data-testid="column"]:nth-of-type(1), [data-testid="column"]:nth-of-type(3) { position: sticky; top: 2rem; align-self: flex-start; z-index: 999; }
+
+    /* ============ ここから: ランディング用スタイル ============ */
+    @keyframes mkpFade { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+    @keyframes mkpGlow { 0%,100% { opacity: .55; transform: scale(1); } 50% { opacity: .9; transform: scale(1.08); } }
+
+    /* --- ヒーロー --- */
+    .mkp-hero { text-align: center; padding: 26px 16px 6px; animation: mkpFade .85s cubic-bezier(.22,.9,.3,1) both; }
+    .mkp-hero-icon { display: inline-block; position: relative; margin-bottom: 16px; }
+    .mkp-hero-icon::before { content: ""; position: absolute; inset: -26%; border-radius: 50%; background: radial-gradient(circle, rgba(59,130,246,.34) 0%, rgba(124,58,237,.16) 45%, rgba(59,130,246,0) 72%); animation: mkpGlow 4.5s ease-in-out infinite; z-index: 0; }
+    .mkp-hero-icon img { position: relative; z-index: 1; width: clamp(66px, 10vw, 98px) !important; height: clamp(66px, 10vw, 98px) !important; margin-right: 0 !important; border-radius: 26% !important; box-shadow: 0 14px 34px rgba(30,58,138,.30); }
+    .mkp-hero-title { font-family: 'Poppins','Noto Sans JP',sans-serif; font-weight: 800; font-size: clamp(2.7rem, 8.5vw, 4.1rem); line-height: 1.02; margin: 0; letter-spacing: -.025em; background: linear-gradient(100deg, #0f172a 0%, #1e3a8a 42%, #3b82f6 78%, #7c3aed 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+    .mkp-hero-kana { color: #64748b !important; font-size: .78rem !important; letter-spacing: .46em; text-indent: .46em; margin: 12px 0 0 !important; font-weight: 700 !important; }
+    .mkp-hero-rule { width: 58px; height: 4px; margin: 20px auto 18px; border-radius: 999px; background: linear-gradient(90deg, #2563eb, #7c3aed); }
+    .mkp-hero-tag { font-size: clamp(1.08rem, 2.7vw, 1.4rem) !important; font-weight: 800 !important; color: #0f172a !important; margin: 0 0 12px !important; }
+    .mkp-hero-desc { max-width: 640px; margin: 0 auto !important; color: #475569 !important; font-size: .93rem !important; line-height: 1.95 !important; font-weight: 500 !important; }
+
+    /* --- セクション見出し --- */
+    .mkp-sec-title { text-align: center; color: #1e3a8a !important; font-weight: 800 !important; letter-spacing: .015em; margin: 0 0 20px !important; padding-bottom: 13px; position: relative; }
+    .mkp-sec-title::after { content: ""; position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); width: 42px; height: 3px; border-radius: 999px; background: linear-gradient(90deg, #2563eb, #7c3aed); }
+    .mkp-sec-lead { text-align: center; color: #64748b !important; font-size: .88rem !important; font-weight: 500 !important; margin: -8px 0 22px !important; }
+
+    /* --- カード共通のホバー --- */
+    .mkp-card { transition: transform .24s cubic-bezier(.22,.9,.3,1), box-shadow .24s ease; }
+    .mkp-card:hover { transform: translateY(-5px); box-shadow: 0 16px 34px rgba(15,23,42,.14) !important; }
+
+    /* --- 入力まわり --- */
+    .stTextInput input { border-radius: 12px !important; border: 1.5px solid #cbd5e1 !important; background: rgba(255,255,255,.92) !important; padding: .58rem .85rem !important; transition: border-color .18s ease, box-shadow .18s ease !important; }
+    .stTextInput input:focus { border-color: #3b82f6 !important; box-shadow: 0 0 0 3px rgba(59,130,246,.18) !important; }
+    .stButton > button[kind="primary"] { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important; border: none !important; border-radius: 12px !important; font-weight: 800 !important; letter-spacing: .04em !important; padding: .62rem 1rem !important; box-shadow: 0 7px 20px rgba(37,99,235,.32) !important; transition: transform .18s ease, box-shadow .18s ease !important; }
+    .stButton > button[kind="primary"]:hover { transform: translateY(-2px); box-shadow: 0 12px 26px rgba(37,99,235,.42) !important; }
+
+    /* --- 折りたたみ（法的情報） --- */
+    [data-testid="stExpander"] { border-radius: 14px !important; border: 1px solid #cbd5e1 !important; background: rgba(255,255,255,.88) !important; overflow: hidden; box-shadow: 0 2px 10px rgba(15,23,42,.05); margin-bottom: 9px; }
+    [data-testid="stExpander"] summary:hover { background: rgba(219,234,254,.5); }
+    /* ============ ここまで ============ */
     </style>
 """)
 
@@ -265,23 +300,181 @@ if st.session_state.get("access_token") and st.session_state.get("refresh_token"
         logger.warning(f"セッション復元エラー: {e}")
 
 if not st.session_state.user:
-    st.markdown(f"<br><h2 style='text-align: center; color: #1e3a8a;'>{app_icon}Mokipra</h2>", unsafe_allow_html=True)
-    
+    _hero_icon = get_icon_html("mokipra_icon_official.png", size="clamp(66px, 10vw, 98px)")
+    _hero_html = (
+        '<div class="mkp-hero">'
+        '<div class="mkp-hero-icon">' + _hero_icon + '</div>'
+        '<h1 class="mkp-hero-title">Mokipra</h1>'
+        '<p class="mkp-hero-kana">M O K I P R A</p>'
+        '<div class="mkp-hero-rule"></div>'
+        '<p class="mkp-hero-tag">面接の不安を、自信に変える。</p>'
+        '<p class="mkp-hero-desc">Mokipra（モキプラ）は、本番さながらの緊張感で練習できるAI模擬面接パートナーです。'
+        '最新のAIがあなたの回答をリアルタイムで分析し、面接後にはプロ視点での総合評価や改善アドバイスを提供します。</p>'
+        '</div>'
+    )
+    st.markdown(_hero_html, unsafe_allow_html=True)
+
+    st.markdown("<div style='height: 26px;'></div>", unsafe_allow_html=True)
+
+    # ====================================================
+    # 📢 サービス紹介セクション（ログイン前に表示）
+    #    未ログインの訪問者・審査担当者・検索エンジンに対して
+    #    サービス内容を明示するためのセクション。
+    #    ログインフォームは説明を読んだ後に来るよう、下部に配置する。
+    # ====================================================
     st.markdown("""
-    <div style="max-width: 600px; margin: 0 auto; background: rgba(255, 255, 255, 0.8); padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 20px; border: 1px solid #cbd5e1;">
-        <h4 style="color: #0f172a; margin-top: 0;">🤖 面接の不安を、自信に変える。</h4>
-        <p style="color: #475569; font-size: 0.95rem; margin-bottom: 0;">Mokipra（モキプラ）は、本番さながらの緊張感で練習できるAI模擬面接パートナーです。<br>最新のAIがあなたの回答をリアルタイムで分析し、面接後にはプロ視点での総合評価や改善アドバイスを提供します。</p>
+    <div style="max-width: 900px; margin: 0 auto;">
+        <h3 class="mkp-sec-title">Mokipraでできること</h3>
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("<p style='text-align: center; color: #64748b; font-weight: bold;'>ログイン / 新規登録</p>", unsafe_allow_html=True)
-    
+    feat_col1, feat_col2, feat_col3 = st.columns(3)
+    _features = [
+        ("🎤", "本番さながらの音声面接",
+         "AIが面接官として音声で質問します。テキスト入力だけでなく、実際に声に出して答える練習ができます。"),
+        ("📊", "AIによる自動採点",
+         "面接終了後、回答内容を分析して総合評価を提示します。強み・改善点・次に取るべき行動が具体的にわかります。"),
+        ("📄", "書類を読み込んだ深い面接",
+         "エントリーシートや研究計画書のPDFを読み込ませると、その内容に踏み込んだ質問が生成されます（Maxプラン）。"),
+    ]
+    for _col, (_icon, _title, _desc) in zip([feat_col1, feat_col2, feat_col3], _features):
+        with _col:
+            st.markdown(f"""
+            <div class="mkp-card" style="background: rgba(255,255,255,0.85); padding: 20px; border-radius: 14px;
+                        border: 1px solid #cbd5e1; height: 100%; min-height: 190px;">
+                <div style="font-size: 1.8rem; text-align: center;">{_icon}</div>
+                <h5 style="color: #0f172a; text-align: center; margin: 8px 0 10px 0;">{_title}</h5>
+                <p style="color: #475569; font-size: 0.88rem; margin: 0; line-height: 1.7;">{_desc}</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+    st.markdown("<div style='height: 32px;'></div>", unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style="max-width: 900px; margin: 0 auto;">
+        <h3 class="mkp-sec-title">対応している面接シーン</h3>
+        <div class="mkp-card" style="background: rgba(255,255,255,0.85); padding: 22px; border-radius: 14px;
+                    border: 1px solid #cbd5e1;">
+            <p style="color: #475569; font-size: 0.95rem; line-height: 2; margin: 0; text-align: center;">
+                🏪 アルバイト面接　／　🎯 新卒採用面接<br>
+                💻 ITエンジニア採用面接　／　🎓 大学院入試面接
+            </p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("<div style='height: 32px;'></div>", unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style="max-width: 900px; margin: 0 auto;">
+        <h3 class="mkp-sec-title">ご利用の流れ</h3>
+        <div class="mkp-card" style="background: rgba(255,255,255,0.85); padding: 22px; border-radius: 14px;
+                    border: 1px solid #cbd5e1;">
+            <p style="color: #475569; font-size: 0.92rem; line-height: 2; margin: 0;">
+                <strong style="color:#0f172a;">1.</strong> メールアドレスで無料登録（クレジットカード不要）<br>
+                <strong style="color:#0f172a;">2.</strong> 面接シーンと役割を選んで面接をスタート<br>
+                <strong style="color:#0f172a;">3.</strong> AI面接官の質問に音声またはテキストで回答<br>
+                <strong style="color:#0f172a;">4.</strong> 面接終了後、総合評価と改善アドバイスを確認
+            </p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("<div style='height: 36px;'></div>", unsafe_allow_html=True)
+
+    # ---- 料金プラン ----
+    st.markdown("""
+    <div style="max-width: 900px; margin: 0 auto;">
+        <h3 class="mkp-sec-title">料金プラン</h3>
+        <p class="mkp-sec-lead">
+            まずは無料で。物足りなくなったら、いつでも切り替えられます。
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    plan_col1, plan_col2, plan_col3 = st.columns(3)
+    _plans = [
+        {
+            "name": "Free", "price": "0", "unit": "円", "limit": "1日 1回",
+            "items": ["AI音声面接", "自動採点・アドバイス"],
+            "bg": "linear-gradient(160deg, #f8fafc 0%, #eef2f7 100%)",
+            "border": "#cbd5e1", "accent": "#64748b",
+            "shadow": "0 2px 8px rgba(15,23,42,0.06)",
+            "badge": "", "badge_bg": "",
+        },
+        {
+            "name": "Pro", "price": "480", "unit": "円 / 月", "limit": "1日 10回",
+            "items": ["AI音声面接", "自動採点・アドバイス", "面接履歴の保存"],
+            "bg": "linear-gradient(160deg, #eff6ff 0%, #dbeafe 100%)",
+            "border": "#3b82f6", "accent": "#1d4ed8",
+            "shadow": "0 6px 20px rgba(37,99,235,0.20)",
+            "badge": "いちばん人気", "badge_bg": "linear-gradient(90deg, #2563eb, #3b82f6)",
+        },
+        {
+            "name": "Max", "price": "980", "unit": "円 / 月", "limit": "1日 20回",
+            "items": ["Proのすべての機能", "PDF読み込み対応", "書類に基づく深掘り質問"],
+            "bg": "linear-gradient(160deg, #faf5ff 0%, #f3e8ff 100%)",
+            "border": "#a855f7", "accent": "#7c3aed",
+            "shadow": "0 6px 20px rgba(147,51,234,0.18)",
+            "badge": "書類対応", "badge_bg": "linear-gradient(90deg, #7c3aed, #a855f7)",
+        },
+    ]
+    for _col, _p in zip([plan_col1, plan_col2, plan_col3], _plans):
+        _li = "".join(
+            "<li style='color:#475569; font-size:0.85rem; margin-bottom:6px; line-height:1.5;'>"
+            + _i + "</li>"
+            for _i in _p["items"]
+        )
+        if _p["badge"]:
+            _badge_html = (
+                "<div style='position:absolute; top:-11px; left:50%; transform:translateX(-50%);"
+                " background:" + _p["badge_bg"] + "; color:#ffffff; font-size:0.7rem; font-weight:bold;"
+                " padding:3px 14px; border-radius:999px; white-space:nowrap;"
+                " box-shadow:0 2px 6px rgba(15,23,42,0.18);'>" + _p["badge"] + "</div>"
+            )
+        else:
+            _badge_html = ""
+        _card_html = (
+            "<div class=\"mkp-card\" style=\"position:relative; background: " + _p["bg"] + "; padding: 26px 20px 20px 20px;"
+            " border-radius: 16px; border: 2px solid " + _p["border"] + ";"
+            " box-shadow: " + _p["shadow"] + "; height: 100%; min-height: 268px;\">"
+            + _badge_html
+            + "<h4 style=\"color: " + _p["accent"] + "; text-align: center; margin: 0 0 6px 0;"
+            " letter-spacing: 0.06em;\">" + _p["name"] + "</h4>"
+            "<p style=\"text-align:center; margin:0 0 2px 0;\">"
+            "<span style=\"color:#0f172a; font-weight:800; font-size:2rem; line-height:1;\">"
+            + _p["price"] + "</span>"
+            "<span style=\"color:#64748b; font-size:0.82rem; margin-left:3px;\">"
+            + _p["unit"] + "</span></p>"
+            "<p style=\"text-align:center; color:" + _p["accent"] + "; font-size:0.82rem;"
+            " font-weight:bold; margin:8px 0 14px 0;\">面接 " + _p["limit"] + "まで</p>"
+            "<div style=\"border-top:1px solid rgba(148,163,184,0.45); padding-top:12px;\">"
+            "<ul style=\"margin:0; padding-left: 1.1rem;\">" + _li + "</ul>"
+            "</div></div>"
+        )
+        with _col:
+            st.markdown(_card_html, unsafe_allow_html=True)
+
+    st.caption("※ 表示価格は税込です。有料プランはStripeによるクレジットカード決済で、いつでも解約できます。")
+
+    st.markdown("<hr style='margin: 40px 0 24px 0; border: none; border-top: 1px solid #cbd5e1;'>", unsafe_allow_html=True)
+
+    # ---- ログイン / 新規登録（説明を読んだ後に配置）----
+    st.markdown("""
+    <div style="max-width: 600px; margin: 0 auto; text-align:center;">
+        <h3 class="mkp-sec-title">はじめる</h3>
+        <p class="mkp-sec-lead">
+            メールアドレスだけで登録できます。クレジットカードは不要です。
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
     col_dummy1, col_login, col_dummy2 = st.columns([1, 2, 1])
     with col_login:
         auth_mode = st.radio("モード", ["ログイン", "新規登録（無料）"], horizontal=True, label_visibility="collapsed")
         email = st.text_input("メールアドレス", placeholder="example@email.com")
         password = st.text_input("パスワード", type="password", placeholder="6文字以上")
-        
+
         if st.button("実行する", type="primary", use_container_width=True):
             if not email or not password:
                 st.error("⚠️ メールアドレスとパスワードを入力してください。")
@@ -308,6 +501,26 @@ if not st.session_state.user:
                                 st.error("⚠️ メールアドレスまたはパスワードが違います。")
                     except Exception as e:
                         st.error(f"⚠️ 認証エラー: {e}")
+
+    st.markdown("<div style='height: 32px;'></div>", unsafe_allow_html=True)
+
+    # ---- 法的情報（未ログインでも閲覧できるようにする）----
+    st.markdown("""
+    <div style="max-width: 900px; margin: 0 auto;">
+        <h3 class="mkp-sec-title">運営情報・法的情報</h3>
+    </div>
+    """, unsafe_allow_html=True)
+
+    for _doc_name in LEGAL_DOC_FILES.keys():
+        with st.expander(f"📄 {_doc_name}"):
+            st.markdown(load_legal_doc(_doc_name))
+
+    st.markdown("""
+    <div style="text-align:center; color:#64748b; font-size:0.8rem; margin-top: 28px; padding-bottom: 12px;">
+        © Mokipra　お問い合わせ: mokipra.ai.official@gmail.com
+    </div>
+    """, unsafe_allow_html=True)
+
     st.stop()
 
 user_id = st.session_state.user.id
