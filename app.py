@@ -14,6 +14,7 @@ import uuid
 import re
 import PyPDF2
 import base64
+import hashlib
 from datetime import date, datetime
 import logging
 
@@ -94,11 +95,18 @@ Stripeを利用したクレジットカード決済となります。初回お�
 デジタルコンテンツおよびサービスの性質上、決済完了後のキャンセルおよび返金には一切応じられません。あらかじめ提供内容をご理解の上、お申し込みください。
 """
 
-def display_terms_and_checkbox(key_name):
-    """規約をアコーディオン表示し、同意チェックボックスを返す共通関数"""
-    with st.expander("📄 料金プラン・利用規約・退会について（クリックして確認）"):
+def display_terms_and_checkbox(key_name=None):
+    """規約をアコーディオン表示する共通関数。
+
+    以前は同意チェックボックスを必須にして課金リンクを隠していたが、
+    Stripe Checkout 側で consent_collection により利用規約への同意を
+    必須収集している（同意日時つきで Stripe に記録される）ため、
+    アプリ内での二重の同意取得は廃止し、リンクは常時表示する。
+    """
+    with st.expander("料金プラン・利用規約・退会について", icon=":material/receipt_long:"):
         st.markdown(TERMS_OF_SERVICE_TEXT)
-    return st.checkbox("利用規約および課金に関する事項を確認し、同意します", key=key_name)
+    st.caption("※ お申し込み手続きの中で、利用規約への同意をあらためて確認いたします。")
+    return True
 
 # ★ サイドバーに表示する、詳細な法的ページ（5種）の読み込み用
 LEGAL_DOC_FILES = {
@@ -121,81 +129,289 @@ def load_legal_doc(doc_name: str) -> str:
         return f"⚠️ {path} が見つかりません。legalフォルダの配置を確認してください。"
 
 # ====================================================
-# 🎨 グローバルCSS（Deploy、三点リーダー、Stopボタン非表示化）
+# 🎨 グローバルスタイル
+#    デザイン方針: 日本の面接という題材から色を採る。
+#    藍（リクルートスーツ）・墨（筆記）・生成りの紙・朱（印）。
+#    グラデーションと装飾は排し、罫線と余白で構造を作る。
 # ====================================================
 st.html("""
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@500;700;900&family=Poppins:wght@600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Shippori+Mincho+B1:wght@600;700;800&display=swap" rel="stylesheet">
     <style>
-    /* サイドバー開閉ボタンを守るため、ヘッダー自体は消さずに背景のみ透明化 */
+    :root {
+        --ink:        #1B1E21;
+        --ink-soft:   #4A5056;
+        --muted:      #8B9096;
+        --paper:      #F4F4F0;
+        --surface:    #FFFFFF;
+        --line:       #E0E0D8;
+        --line-soft:  #EFEFE9;
+        --ai:         #22385C;
+        --ai-soft:    #3A5B8C;
+        --ai-wash:    #EEF1F6;
+        --seal:       #B8443A;
+        --seal-wash:  #FBF0EE;
+        --sky:        #8FCDEA;
+        --sky-hover:  #A6D9F1;
+        --sky-line:   #6FBBDE;
+        --gauge:      #2E8B57;
+        --serif: 'Shippori Mincho B1', 'Noto Serif JP', serif;
+        --sans:  'Noto Sans JP', system-ui, sans-serif;
+    }
+
+    /* ---- Streamlit のクロームを整理 ---- */
     header { background: transparent !important; }
-    
-    /* 右上の三点リーダーをピンポイントで非表示 */
     #MainMenu { visibility: hidden !important; }
     [data-testid="stMainMenu"] { visibility: hidden !important; }
-    
-    /* Deployボタンをピンポイントで非表示 */
     .stDeployButton { display: none !important; }
     .stAppDeployButton { display: none !important; }
     [data-testid="stAppDeployButton"] { display: none !important; }
-    
-    /* ローディング時の「Stop」ボタン（ステータスウィジェット）を非表示 */
     [data-testid="stStatusWidget"] { visibility: hidden !important; display: none !important; }
-    
-    .stApp { background: linear-gradient(135deg, #e0e8f0 0%, #c8d6e5 100%); font-family: 'Noto Sans JP', 'Poppins', sans-serif; }
-    html, body, p, span, h1, h2, h3, h4, h5, li, label, div { color: #0f172a; }
-    .stMarkdown p, .stMarkdown li, div[data-baseweb="radio"] label { color: #0f172a !important; font-weight: 600 !important; }
-    .app-title { background: linear-gradient(90deg, #0f172a 0%, #1e3a8a 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 900; font-size: 2.6rem; margin-bottom: 0.5rem; }
-    .glass-card { background: rgba(255, 255, 255, 0.95) !important; backdrop-filter: blur(20px); border-radius: 20px; padding: 24px; border: 1px solid rgba(255, 255, 255, 0.9); box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08); margin-bottom: 20px; }
-    .status-badge { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white !important; padding: 8px 16px; border-radius: 30px; font-weight: bold; font-size: 0.9rem; display: inline-block; }
-    .feature-badge { background: #e0f2fe; color: #0369a1 !important; padding: 4px 10px; border-radius: 8px; font-size: 0.85rem; font-weight: bold; margin-right: 6px; }
-    [data-testid="column"]:nth-of-type(1), [data-testid="column"]:nth-of-type(3) { position: sticky; top: 2rem; align-self: flex-start; z-index: 999; }
 
-    /* ============ ここから: ランディング用スタイル ============ */
-    @keyframes mkpFade { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
-    @keyframes mkpGlow { 0%,100% { opacity: .55; transform: scale(1); } 50% { opacity: .9; transform: scale(1.08); } }
+    /* ---- 地色と基本のタイポグラフィ ---- */
+    .stApp { background: var(--paper); font-family: var(--sans); }
+    html, body, p, span, h1, h2, h3, h4, h5, li, label, div { color: var(--ink); }
+    .stMarkdown p, .stMarkdown li { color: var(--ink-soft) !important; font-weight: 500 !important; line-height: 1.9; }
+    div[data-baseweb="radio"] label { color: var(--ink) !important; font-weight: 500 !important; }
+    h1, h2, h3 { font-family: var(--serif); letter-spacing: .02em; }
+    h4, h5 { font-family: var(--sans); font-weight: 700; letter-spacing: .01em; }
 
-    /* --- ヒーロー --- */
-    .mkp-hero { text-align: center; padding: 26px 16px 6px; animation: mkpFade .85s cubic-bezier(.22,.9,.3,1) both; }
-    .mkp-hero-icon { display: inline-block; position: relative; margin-bottom: 16px; }
-    .mkp-hero-icon::before { content: ""; position: absolute; inset: -26%; border-radius: 50%; background: radial-gradient(circle, rgba(59,130,246,.34) 0%, rgba(124,58,237,.16) 45%, rgba(59,130,246,0) 72%); animation: mkpGlow 4.5s ease-in-out infinite; z-index: 0; }
-    .mkp-hero-icon img { position: relative; z-index: 1; width: clamp(66px, 10vw, 98px) !important; height: clamp(66px, 10vw, 98px) !important; margin-right: 0 !important; border-radius: 26% !important; box-shadow: 0 14px 34px rgba(30,58,138,.30); }
-    .mkp-hero-title { font-family: 'Poppins','Noto Sans JP',sans-serif; font-weight: 800; font-size: clamp(2.7rem, 8.5vw, 4.1rem); line-height: 1.02; margin: 0; letter-spacing: -.025em; background: linear-gradient(100deg, #0f172a 0%, #1e3a8a 42%, #3b82f6 78%, #7c3aed 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
-    .mkp-hero-kana { color: #64748b !important; font-size: .78rem !important; letter-spacing: .46em; text-indent: .46em; margin: 12px 0 0 !important; font-weight: 700 !important; }
-    .mkp-hero-rule { width: 58px; height: 4px; margin: 20px auto 18px; border-radius: 999px; background: linear-gradient(90deg, #2563eb, #7c3aed); }
-    .mkp-hero-tag { font-size: clamp(1.08rem, 2.7vw, 1.4rem) !important; font-weight: 800 !important; color: #0f172a !important; margin: 0 0 12px !important; }
-    .mkp-hero-desc { max-width: 640px; margin: 0 auto !important; color: #475569 !important; font-size: .93rem !important; line-height: 1.95 !important; font-weight: 500 !important; }
+    /* ---- モーション ---- */
+    @keyframes mkpRise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+    @keyframes mkpFadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes mkpRule { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+    @keyframes mkpFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+    @keyframes mkpLetter { from { opacity: 0; letter-spacing: .28em; } to { opacity: 1; letter-spacing: .06em; } }
+    @keyframes mkpGlowSoft { 0%,100% { opacity: .35; } 50% { opacity: .7; } }
+    @keyframes mkpSeal {
+        0%   { opacity: 0; transform: scale(1.9) rotate(-14deg); }
+        55%  { opacity: 1; transform: scale(.93) rotate(-7deg); }
+        75%  { transform: scale(1.04) rotate(-9deg); }
+        100% { opacity: 1; transform: scale(1) rotate(-8deg); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
 
-    /* --- セクション見出し --- */
-    .mkp-sec-title { text-align: center; color: #1e3a8a !important; font-weight: 800 !important; letter-spacing: .015em; margin: 0 0 20px !important; padding-bottom: 13px; position: relative; }
-    .mkp-sec-title::after { content: ""; position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); width: 42px; height: 3px; border-radius: 999px; background: linear-gradient(90deg, #2563eb, #7c3aed); }
-    .mkp-sec-lead { text-align: center; color: #64748b !important; font-size: .88rem !important; font-weight: 500 !important; margin: -8px 0 22px !important; }
+    /* ---- 見出し（マストヘッド） ---- */
+    .mkp-masthead { display: flex; align-items: center; gap: 14px; padding: 6px 0 14px; border-bottom: 1px solid var(--line); margin-bottom: 26px; animation: mkpRise .6s cubic-bezier(.22,.9,.3,1) both; }
+    .mkp-masthead img { width: 38px !important; height: 38px !important; margin: 0 !important; border-radius: 22% !important; }
+    .mkp-masthead-name { font-family: var(--serif); font-weight: 800; font-size: 1.5rem; letter-spacing: .04em; color: var(--ink) !important; line-height: 1; }
+    .mkp-masthead-sub { font-size: .72rem; letter-spacing: .22em; color: var(--muted) !important; margin-top: 6px; font-weight: 500; }
 
-    /* --- カード共通のホバー --- */
-    .mkp-card { transition: transform .24s cubic-bezier(.22,.9,.3,1), box-shadow .24s ease; }
-    .mkp-card:hover { transform: translateY(-5px); box-shadow: 0 16px 34px rgba(15,23,42,.14) !important; }
+    /* ---- 中身のない装飾ボックスは描画しない ----
+       Streamlit は st.markdown ごとに別コンテナへ包むため、
+       開始タグだけを書いた div が「空の白い箱」として残ってしまう。 */
+    .glass-card:empty, .mkp-card:empty { display: none !important; border: none !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; background: transparent !important; animation: none !important; }
 
-    /* --- 入力まわり --- */
-    .stTextInput input { border-radius: 12px !important; border: 1.5px solid #cbd5e1 !important; background: rgba(255,255,255,.92) !important; padding: .58rem .85rem !important; transition: border-color .18s ease, box-shadow .18s ease !important; }
-    .stTextInput input:focus { border-color: #3b82f6 !important; box-shadow: 0 0 0 3px rgba(59,130,246,.18) !important; }
-    .stButton > button[kind="primary"] { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important; border: none !important; border-radius: 12px !important; font-weight: 800 !important; letter-spacing: .04em !important; padding: .62rem 1rem !important; box-shadow: 0 7px 20px rgba(37,99,235,.32) !important; transition: transform .18s ease, box-shadow .18s ease !important; }
-    .stButton > button[kind="primary"]:hover { transform: translateY(-2px); box-shadow: 0 12px 26px rgba(37,99,235,.42) !important; }
+    /* ---- 登場アニメーション（トップ・面接前）---- */
+    .mkp-card { animation: mkpRise .62s cubic-bezier(.22,.9,.3,1) both; }
+    [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-of-type(1) .mkp-card { animation-delay: .06s; }
+    [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-of-type(2) .mkp-card { animation-delay: .17s; }
+    [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-of-type(3) .mkp-card { animation-delay: .28s; }
 
-    /* --- 折りたたみ（法的情報） --- */
-    [data-testid="stExpander"] { border-radius: 14px !important; border: 1px solid #cbd5e1 !important; background: rgba(255,255,255,.88) !important; overflow: hidden; box-shadow: 0 2px 10px rgba(15,23,42,.05); margin-bottom: 9px; }
-    [data-testid="stExpander"] summary:hover { background: rgba(219,234,254,.5); }
+    /* ---- カード ---- */
+    .glass-card { background: var(--surface) !important; backdrop-filter: none; border-radius: 10px; padding: 24px 26px; border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(27,30,33,.04); margin-bottom: 20px; animation: mkpRise .55s cubic-bezier(.22,.9,.3,1) both; }
+    .mkp-card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; transition: border-color .22s ease, box-shadow .22s ease, transform .22s ease; }
+    .mkp-card:hover { border-color: var(--ai-soft); box-shadow: 0 6px 20px rgba(34,56,92,.09) !important; transform: translateY(-2px); }
 
-    /* --- スポンサーリンク（広告） --- */
+    /* ---- 特徴カードの線画アイコン ---- */
+    .mkp-feat-icon { color: var(--ai); display: flex; justify-content: center; margin-bottom: 14px; }
+    .mkp-feat-icon svg { display: block; }
+    .mkp-card:hover .mkp-feat-icon { color: var(--seal); transition: color .25s ease; }
+
+    /* ---- 面接シーンの一覧 ---- */
+    .mkp-scene-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+    .mkp-scene { display: flex; align-items: center; gap: 12px; padding: 18px 20px; font-size: .93rem; font-weight: 600; color: var(--ink) !important; border-bottom: 1px solid var(--line-soft); transition: background .2s ease; }
+    .mkp-scene:nth-child(odd) { border-right: 1px solid var(--line-soft); }
+    .mkp-scene:nth-last-child(-n+2) { border-bottom: none; }
+    .mkp-scene:hover { background: var(--ai-wash); }
+    .mkp-scene-icon { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; color: var(--ai); transition: color .22s ease, transform .22s ease; }
+    .mkp-scene-icon svg { display: block; }
+    .mkp-scene:hover .mkp-scene-icon { color: var(--seal); transform: translateY(-1px); }
+    @media (max-width: 640px) {
+        .mkp-scene-grid { grid-template-columns: 1fr; }
+        .mkp-scene:nth-child(odd) { border-right: none; }
+        .mkp-scene:nth-last-child(-n+2) { border-bottom: 1px solid var(--line-soft); }
+        .mkp-scene:last-child { border-bottom: none; }
+    }
+
+    /* ---- 見出しの装飾（罫線） ---- */
+    .mkp-eyebrow { font-size: .68rem; letter-spacing: .28em; text-indent: .28em; color: var(--muted) !important; font-weight: 700 !important; margin: 0 0 8px !important; }
+    .mkp-sec-title { font-family: var(--serif); text-align: center; color: var(--ink) !important; font-weight: 800 !important; font-size: 1.42rem; letter-spacing: .05em; margin: 0 0 22px !important; padding-bottom: 14px; position: relative; }
+    .mkp-sec-title::after { content: ""; position: absolute; left: 50%; bottom: 0; width: 34px; height: 2px; background: var(--ai); transform-origin: center; animation: mkpRule .7s cubic-bezier(.22,.9,.3,1) .2s both; margin-left: -17px; }
+    .mkp-eyebrow { animation: mkpFadeIn .6s ease both; }
+    .mkp-sec-title { animation: mkpRise .6s cubic-bezier(.22,.9,.3,1) both; }
+    div[data-baseweb="radio"] label { transition: color .18s ease, transform .18s ease; }
+    div[data-baseweb="radio"] label:hover { color: var(--ai) !important; transform: translateX(2px); }
+    [data-testid="stFileUploader"] section { border-radius: 8px !important; border: 1px dashed var(--line) !important; background: var(--surface) !important; transition: border-color .2s ease, background .2s ease; }
+    [data-testid="stFileUploader"] section:hover { border-color: var(--ai-soft) !important; background: var(--ai-wash) !important; }
+    [data-testid="stLinkButton"] a { transition: transform .18s ease, box-shadow .18s ease !important; }
+    [data-testid="stLinkButton"] a:hover { transform: translateY(-1px); }
+
+    .mkp-sec-lead { text-align: center; color: var(--muted) !important; font-size: .86rem !important; font-weight: 500 !important; margin: -10px 0 24px !important; }
+
+    /* ---- ヒーロー ---- */
+    .mkp-hero { text-align: center; padding: 36px 16px 10px; animation: mkpRise .8s cubic-bezier(.22,.9,.3,1) both; }
+    .mkp-hero-icon { display: inline-block; margin-bottom: 20px; position: relative; animation: mkpFloat 6s ease-in-out 1.2s infinite; }
+    .mkp-hero-icon::before { content: ""; position: absolute; inset: -22%; border-radius: 50%; background: radial-gradient(circle, rgba(34,56,92,.14) 0%, rgba(34,56,92,0) 68%); animation: mkpGlowSoft 5s ease-in-out infinite; z-index: 0; }
+    .mkp-hero-icon img { position: relative; z-index: 1; }
+    .mkp-hero-icon img { width: clamp(58px, 8vw, 76px) !important; height: clamp(58px, 8vw, 76px) !important; margin-right: 0 !important; border-radius: 24% !important; box-shadow: 0 6px 20px rgba(27,30,33,.12); }
+    .mkp-hero-title { font-family: var(--serif); font-weight: 800; font-size: clamp(2.4rem, 7vw, 3.5rem); line-height: 1.05; margin: 0; letter-spacing: .06em; color: var(--ink) !important; animation: mkpLetter 1.1s cubic-bezier(.22,.9,.3,1) .15s both; }
+    .mkp-hero-kana { color: var(--muted) !important; font-size: .7rem !important; letter-spacing: .44em; text-indent: .44em; margin: 14px 0 0 !important; font-weight: 500 !important; }
+    .mkp-hero-rule { width: 40px; height: 2px; margin: 26px auto 22px; background: var(--ai); animation: mkpRule .8s cubic-bezier(.22,.9,.3,1) .25s both; }
+    .mkp-hero-tag { font-family: var(--serif); font-size: clamp(1.15rem, 2.6vw, 1.55rem) !important; font-weight: 700 !important; color: var(--ink) !important; margin: 0 0 16px !important; letter-spacing: .04em; animation: mkpRise .7s cubic-bezier(.22,.9,.3,1) .45s both; }
+    .mkp-hero-desc { max-width: 620px; margin: 0 auto !important; color: var(--ink-soft) !important; font-size: .92rem !important; line-height: 2.05 !important; font-weight: 400 !important; animation: mkpRise .7s cubic-bezier(.22,.9,.3,1) .6s both; }
+
+    /* ---- 朱印（評価スコア）---- */
+    .mkp-seal-wrap { display: flex; align-items: center; gap: 26px; padding: 6px 0 22px; }
+    .mkp-seal { flex: 0 0 auto; width: 104px; height: 104px; border: 3px solid var(--seal); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--seal) !important; transform: rotate(-8deg); animation: mkpSeal .85s cubic-bezier(.34,1.3,.5,1) .15s both; }
+    .mkp-seal-num { font-family: var(--serif); font-size: 2.5rem; font-weight: 800; line-height: 1; color: var(--seal) !important; }
+    .mkp-seal-unit { font-size: .62rem; letter-spacing: .2em; margin-top: 5px; color: var(--seal) !important; font-weight: 700; }
+    .mkp-seal-label { animation: mkpFadeIn .6s ease .55s both; }
+    .mkp-seal-label .mkp-eyebrow { margin-bottom: 6px !important; }
+    .mkp-seal-label h3 { font-family: var(--serif); margin: 0; font-size: 1.3rem; letter-spacing: .04em; }
+
+    /* ---- バッジ ---- */
+    .status-badge { background: var(--ai-wash); color: var(--ai) !important; padding: 6px 14px; border-radius: 4px; font-weight: 700; font-size: .8rem; display: inline-block; letter-spacing: .04em; border: 1px solid rgba(34,56,92,.16); }
+    .feature-badge { background: transparent; color: var(--ink-soft) !important; padding: 4px 0; font-size: .82rem; font-weight: 500; margin-right: 16px; border-bottom: 1px solid var(--line); display: inline-block; }
+
+    /* ---- フォーム ---- */
+    .stTextInput input, .stTextArea textarea { border-radius: 6px !important; border: 1px solid var(--line) !important; background: var(--surface) !important; padding: .6rem .85rem !important; font-family: var(--sans) !important; transition: border-color .18s ease, box-shadow .18s ease !important; }
+    .stTextInput input:focus, .stTextArea textarea:focus { border-color: var(--ai) !important; box-shadow: 0 0 0 3px rgba(34,56,92,.10) !important; }
+    .stButton > button[kind="primary"],
+    .stButton > button[kind="primary"] *,
+    [data-testid="stLinkButton"] a[kind="primary"],
+    [data-testid="stLinkButton"] a[kind="primary"] *,
+    [data-testid="baseButton-primary"],
+    [data-testid="baseButton-primary"] * { color: #0E2136 !important; }
+    .stButton > button[kind="primary"],
+    [data-testid="stLinkButton"] a[kind="primary"],
+    [data-testid="baseButton-primary"] {
+        background: var(--sky) !important; border: 1px solid var(--sky-line) !important;
+        border-radius: 6px !important; font-weight: 700 !important; letter-spacing: .06em !important;
+        padding: .62rem 1rem !important; box-shadow: none !important;
+        transition: background .18s ease, transform .18s ease !important;
+    }
+    .stButton > button[kind="primary"]:hover,
+    [data-testid="stLinkButton"] a[kind="primary"]:hover,
+    [data-testid="baseButton-primary"]:hover { background: var(--sky-hover) !important; transform: translateY(-1px); }
+    .stButton > button[kind="secondary"] { border-radius: 6px !important; border: 1px solid var(--line) !important; background: var(--surface) !important; font-weight: 600 !important; }
+    [data-testid="stLinkButton"] a { border-radius: 6px !important; letter-spacing: .06em !important; font-weight: 700 !important; }
+
+    /* ---- 折りたたみ ---- */
+    [data-testid="stExpander"] { border-radius: 8px !important; border: 1px solid var(--line) !important; background: var(--surface) !important; overflow: hidden; box-shadow: none; margin-bottom: 10px; }
+    [data-testid="stExpander"] summary { font-weight: 600 !important; }
+    [data-testid="stExpander"] summary:hover { background: var(--ai-wash); }
+
+    /* ---- 進捗 ---- */
+    .stProgress > div > div > div { background: #DCDCD4 !important; border-radius: 999px !important; }
+    .stProgress > div > div > div > div { background: var(--gauge) !important; border-radius: 999px !important; }
+    [data-testid="stProgress"] > div > div > div { background: #DCDCD4 !important; border-radius: 999px !important; }
+    [data-testid="stProgress"] > div > div > div > div { background: var(--gauge) !important; border-radius: 999px !important; }
+
+    /* ---- チャット ---- */
+    [data-testid="stChatMessage"] { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; animation: mkpRise .45s cubic-bezier(.22,.9,.3,1) both; }
+
+    /* ---- 広告 ---- */
     .mkp-ad-wrap { max-width: 900px; margin: 0 auto; text-align: center; }
-    .mkp-ad-label { color: #94a3b8 !important; font-size: .68rem !important; font-weight: 700 !important; letter-spacing: .18em; text-indent: .18em; margin: 0 0 10px !important; text-transform: none; }
+    .mkp-ad-label { color: var(--muted) !important; font-size: .66rem !important; font-weight: 700 !important; letter-spacing: .22em; text-indent: .22em; margin: 0 0 12px !important; }
     .mkp-ad-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 14px; }
-    .mkp-ad-item { display: inline-flex; align-items: center; justify-content: center; padding: 10px 14px; background: rgba(255,255,255,.72); border: 1px solid #dbe3ec; border-radius: 12px; box-shadow: 0 2px 8px rgba(15,23,42,.05); transition: transform .2s ease, box-shadow .2s ease; }
-    .mkp-ad-item:hover { transform: translateY(-3px); box-shadow: 0 8px 18px rgba(15,23,42,.10); }
+    .mkp-ad-item { display: inline-flex; align-items: center; justify-content: center; padding: 12px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; transition: border-color .2s ease; }
+    .mkp-ad-item:hover { border-color: var(--ai-soft); }
     .mkp-ad-item img { display: block; max-width: 100%; height: auto; }
-    /* ============ ここまで ============ */
+
+    /* ---- スクロール追従（印を置いた列だけ）---- */
+    .mkp-stick { display: none; }
+    [data-testid="stHorizontalBlock"]:has(.mkp-stick) { align-items: flex-start !important; }
+    [data-testid="column"]:has(.mkp-stick) {
+        position: -webkit-sticky; position: sticky; top: 1rem;
+        align-self: flex-start; z-index: 5;
+        max-height: calc(100vh - 2rem); overflow-y: auto;
+        scrollbar-width: none;
+    }
+    [data-testid="column"]:has(.mkp-stick)::-webkit-scrollbar { display: none; }
     </style>
 """)
+
+# ==============================================================================
+# 🖋 線画アイコン（インラインSVG）
+#    絵文字は環境ごとに描画が変わり配色も制御できないため使わない。
+#    currentColor を使い、親要素の色指定でトーンを合わせる。
+# ==============================================================================
+def line_icon(name, size=34, stroke=1.5):
+    paths = {
+        "mic": (
+            '<rect x="15" y="5" width="10" height="17" rx="5"/>'
+            '<path d="M10 18v1.5a10 10 0 0 0 20 0V18"/>'
+            '<path d="M20 29.5V34"/><path d="M14.5 34h11"/>'
+        ),
+        "score": (
+            '<path d="M6 33.5h28"/>'
+            '<rect x="10" y="22" width="6" height="11" rx="1.4"/>'
+            '<rect x="19" y="16" width="6" height="17" rx="1.4"/>'
+            '<rect x="28" y="25" width="6" height="8" rx="1.4"/>'
+            '<path d="M9 13.5l6.5-4 6 4.5 8-7"/>'
+            '<path d="M29.5 7h3v3"/>'
+        ),
+        # 店舗：アルバイト面接
+        "shop": (
+            '<path d="M7 14.5L9.5 7h21l2.5 7.5"/>'
+            '<path d="M9.5 14.5v18a1 1 0 0 0 1 1h19a1 1 0 0 0 1-1v-18"/>'
+            '<path d="M7 14.5h26"/>'
+            '<path d="M16 33.5V24.5h8v9"/>'
+        ),
+        # 社屋：新卒採用面接
+        "building": (
+            '<path d="M11 33.5V8a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v25.5"/>'
+            '<path d="M23 33.5V17.5h6a1 1 0 0 1 1 1v15"/>'
+            '<path d="M7.5 33.5h25"/>'
+            '<path d="M15 13h1"/><path d="M19 13h1"/>'
+            '<path d="M15 19h1"/><path d="M19 19h1"/>'
+            '<path d="M15 25h1"/><path d="M19 25h1"/>'
+            '<path d="M26 23h1"/><path d="M26 28h1"/>'
+        ),
+        # 括弧：ITエンジニア採用面接
+        "code": (
+            '<path d="M14.5 12.5L7 20l7.5 7.5"/>'
+            '<path d="M25.5 12.5L33 20l-7.5 7.5"/>'
+            '<path d="M22.5 8.5l-5 23"/>'
+        ),
+        # 角帽：大学院・推薦入試面接
+        "cap": (
+            '<path d="M20 7.5L5.5 14 20 20.5 34.5 14 20 7.5z"/>'
+            '<path d="M11 17v8.5c0 2.6 4 4.8 9 4.8s9-2.2 9-4.8V17"/>'
+            '<path d="M34.5 14v8"/>'
+        ),
+        "doc": (
+            '<path d="M11.5 5h11l7 7v22.5a1 1 0 0 1-1 1H11.5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/>'
+            '<path d="M22.5 5v7h7"/>'
+            '<path d="M15 20h10"/><path d="M15 25h10"/><path d="M15 30h6"/>'
+        ),
+    }
+    d = paths.get(name, "")
+    return (
+        '<svg viewBox="0 0 40 40" width="' + str(size) + '" height="' + str(size) + '" '
+        'fill="none" stroke="currentColor" stroke-width="' + str(stroke) + '" '
+        'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>'
+    )
+
+def render_gauge(ratio, caption=""):
+    """進捗バーを自前で描画する。Streamlitの内部DOMに依存しないため確実に色が当たる。"""
+    pct = max(0.0, min(1.0, float(ratio))) * 100
+    html = (
+        '<div style="margin:6px 0 2px;">'
+        '<div style="height:8px;background:#DCDCD4;border-radius:999px;overflow:hidden;">'
+        '<div style="height:100%;width:' + f"{pct:.1f}" + '%;background:#2E8B57;'
+        'border-radius:999px;transition:width .5s cubic-bezier(.22,.9,.3,1);"></div>'
+        '</div>'
+    )
+    if caption:
+        html += ('<p style="margin:6px 0 0;font-size:.72rem;letter-spacing:.06em;'
+                 'color:#8B9096 !important;font-weight:600;">' + caption + '</p>')
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
 
 def get_icon_html(file_name, size="1.2em"):
     try:
@@ -206,6 +422,10 @@ def get_icon_html(file_name, size="1.2em"):
         return "✨"
 
 app_icon = get_icon_html("mokipra_icon_official.png")
+
+# チャット用アバター（画像が無い環境では従来の絵文字に戻す）
+AVATAR_AI = "avatar_interviewer.png" if os.path.exists("avatar_interviewer.png") else "👔"
+AVATAR_USER = "avatar_user.png" if os.path.exists("avatar_user.png") else "👤"
 
 # ==============================================================================
 # 2. APIキーと各種クライアント設定
@@ -277,6 +497,37 @@ def generate_interview_audio(text: str) -> bytes:
         fallback = client.audio.speech.create(model="tts-1", voice="onyx", input=text)
         return fallback.content
 
+# ==============================================================================
+# 🎤 音声入力（Speech-to-Text）
+#    st.audio_input（Streamlit 1.40+ 標準機能）で録音し、OpenAI Whisper で文字起こす。
+#    外部コンポーネントを使わないのは、Render のビルド安定性を優先するため。
+# ==============================================================================
+WHISPER_MAX_BYTES = 24 * 1024 * 1024  # OpenAI APIの上限(25MB)に対する安全マージン
+
+def transcribe_audio(audio_bytes: bytes) -> tuple:
+    """音声バイト列を日本語テキストに変換する。戻り値は (テキスト, エラーメッセージ)。"""
+    if not audio_bytes:
+        return "", "音声データが空です。"
+    if len(audio_bytes) > WHISPER_MAX_BYTES:
+        return "", "録音が長すぎます。1回の回答は3分以内を目安にしてください。"
+    try:
+        buf = io.BytesIO(audio_bytes)
+        buf.name = "answer.wav"
+        result = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=buf,
+            language="ja",
+            # 面接文脈をヒントとして与えると、専門用語や固有名詞の精度が上がる
+            prompt="これは就職活動・大学院入試の面接における応募者の回答です。志望動機、自己PR、ガクチカ、研究内容などが含まれます。",
+        )
+        transcribed = (result.text or "").strip()
+        if not transcribed:
+            return "", "音声を認識できませんでした。もう少し大きな声で、静かな場所でお試しください。"
+        return transcribed, None
+    except Exception as e:
+        logger.error(f"transcribe_audio failed: {e}")
+        return "", "音声の変換に失敗しました。もう一度お試しいただくか、テキスト入力をご利用ください。"
+
 stripe.api_key = get_secret("STRIPE_SECRET_KEY", "")
 STRIPE_PRICE_ID_PRO = get_secret("STRIPE_PRICE_ID_PRO", "")
 STRIPE_PRICE_ID_MAX = get_secret("STRIPE_PRICE_ID_MAX", "")
@@ -338,19 +589,20 @@ if not st.session_state.user:
 
     feat_col1, feat_col2, feat_col3 = st.columns(3)
     _features = [
-        ("🎤", "本番さながらの音声面接",
+        ("mic", "本番さながらの音声面接",
          "AIが面接官として音声で質問します。テキスト入力だけでなく、実際に声に出して答える練習ができます。"),
-        ("📊", "AIによる自動採点",
+        ("score", "AIによる自動採点",
          "面接終了後、回答内容を分析して総合評価を提示します。強み・改善点・次に取るべき行動が具体的にわかります。"),
-        ("📄", "書類を読み込んだ深い面接",
+        ("doc", "書類を読み込んだ深い面接",
          "エントリーシートや研究計画書のPDFを読み込ませると、その内容に踏み込んだ質問が生成されます（Maxプラン）。"),
     ]
     for _col, (_icon, _title, _desc) in zip([feat_col1, feat_col2, feat_col3], _features):
+        _icon_svg = line_icon(_icon)
         with _col:
             st.markdown(f"""
             <div class="mkp-card" style="background: rgba(255,255,255,0.85); padding: 20px; border-radius: 14px;
                         border: 1px solid #cbd5e1; height: 100%; min-height: 190px;">
-                <div style="font-size: 1.8rem; text-align: center;">{_icon}</div>
+                <div class="mkp-feat-icon">{_icon_svg}</div>
                 <h5 style="color: #0f172a; text-align: center; margin: 8px 0 10px 0;">{_title}</h5>
                 <p style="color: #475569; font-size: 0.88rem; margin: 0; line-height: 1.7;">{_desc}</p>
             </div>
@@ -358,18 +610,24 @@ if not st.session_state.user:
 
     st.markdown("<div style='height: 32px;'></div>", unsafe_allow_html=True)
 
-    st.markdown("""
-    <div style="max-width: 900px; margin: 0 auto;">
-        <h3 class="mkp-sec-title">対応している面接シーン</h3>
-        <div class="mkp-card" style="background: rgba(255,255,255,0.85); padding: 22px; border-radius: 14px;
-                    border: 1px solid #cbd5e1;">
-            <p style="color: #475569; font-size: 0.95rem; line-height: 2; margin: 0; text-align: center;">
-                🏪 アルバイト面接　／　🎯 新卒採用面接<br>
-                💻 ITエンジニア採用面接　／　🎓 大学院入試面接
-            </p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    _scenes = [
+        ("shop", "アルバイト面接"),
+        ("building", "新卒採用面接"),
+        ("code", "ITエンジニア採用面接"),
+        ("cap", "大学院・推薦入試面接"),
+    ]
+    _scene_items = "".join(
+        '<div class="mkp-scene"><span class="mkp-scene-icon">'
+        + line_icon(_k, size=26, stroke=1.6)
+        + '</span>' + _label + '</div>'
+        for _k, _label in _scenes
+    )
+    st.markdown(
+        '<div style="max-width: 900px; margin: 0 auto;">'
+        '<h3 class="mkp-sec-title">対応している面接シーン</h3>'
+        '<div class="mkp-scene-grid">' + _scene_items + '</div></div>',
+        unsafe_allow_html=True,
+    )
 
     st.markdown("<div style='height: 32px;'></div>", unsafe_allow_html=True)
 
@@ -405,26 +663,26 @@ if not st.session_state.user:
         {
             "name": "Free", "price": "0", "unit": "円", "limit": "1日 1回",
             "items": ["AI音声面接", "自動採点・アドバイス"],
-            "bg": "linear-gradient(160deg, #f8fafc 0%, #eef2f7 100%)",
-            "border": "#cbd5e1", "accent": "#64748b",
-            "shadow": "0 2px 8px rgba(15,23,42,0.06)",
+            "bg": "#FFFFFF",
+            "border": "#E0E0D8", "accent": "#8B9096",
+            "shadow": "0 1px 2px rgba(27,30,33,.04)",
             "badge": "", "badge_bg": "",
         },
         {
             "name": "Pro", "price": "480", "unit": "円 / 月", "limit": "1日 10回",
             "items": ["AI音声面接", "自動採点・アドバイス", "面接履歴の保存"],
-            "bg": "linear-gradient(160deg, #eff6ff 0%, #dbeafe 100%)",
-            "border": "#3b82f6", "accent": "#1d4ed8",
-            "shadow": "0 6px 20px rgba(37,99,235,0.20)",
-            "badge": "いちばん人気", "badge_bg": "linear-gradient(90deg, #2563eb, #3b82f6)",
+            "bg": "#FFFFFF",
+            "border": "#22385C", "accent": "#22385C",
+            "shadow": "0 4px 18px rgba(34,56,92,.10)",
+            "badge": "いちばん人気", "badge_bg": "#22385C",
         },
         {
-            "name": "Max", "price": "980", "unit": "円 / 月", "limit": "1日 20回",
+            "name": "Max", "price": "980", "unit": "円 / 月", "limit": "1日 10回",
             "items": ["Proのすべての機能", "PDF読み込み対応", "書類に基づく深掘り質問"],
-            "bg": "linear-gradient(160deg, #faf5ff 0%, #f3e8ff 100%)",
-            "border": "#a855f7", "accent": "#7c3aed",
-            "shadow": "0 6px 20px rgba(147,51,234,0.18)",
-            "badge": "書類対応", "badge_bg": "linear-gradient(90deg, #7c3aed, #a855f7)",
+            "bg": "#FFFFFF",
+            "border": "#B8443A", "accent": "#B8443A",
+            "shadow": "0 4px 18px rgba(184,68,58,.10)",
+            "badge": "書類対応", "badge_bg": "#B8443A",
         },
     ]
     for _col, _p in zip([plan_col1, plan_col2, plan_col3], _plans):
@@ -437,7 +695,7 @@ if not st.session_state.user:
             _badge_html = (
                 "<div style='position:absolute; top:-11px; left:50%; transform:translateX(-50%);"
                 " background:" + _p["badge_bg"] + "; color:#ffffff; font-size:0.7rem; font-weight:bold;"
-                " padding:3px 14px; border-radius:999px; white-space:nowrap;"
+                " padding:3px 14px; border-radius:3px; letter-spacing:.06em; white-space:nowrap;"
                 " box-shadow:0 2px 6px rgba(15,23,42,0.18);'>" + _p["badge"] + "</div>"
             )
         else:
@@ -456,7 +714,7 @@ if not st.session_state.user:
             + _p["unit"] + "</span></p>"
             "<p style=\"text-align:center; color:" + _p["accent"] + "; font-size:0.82rem;"
             " font-weight:bold; margin:8px 0 14px 0;\">面接 " + _p["limit"] + "まで</p>"
-            "<div style=\"border-top:1px solid rgba(148,163,184,0.45); padding-top:12px;\">"
+            "<div style=\"border-top:1px solid #EFEFE9; padding-top:14px;\">"
             "<ul style=\"margin:0; padding-left: 1.1rem;\">" + _li + "</ul>"
             "</div></div>"
         )
@@ -533,10 +791,18 @@ if not st.session_state.user:
         '<img border="0" width="1" height="1" '
         'src="https://www11.a8.net/0.gif?a8mat=4BA41A+ABII9E+408S+601S1" alt="">'
     )
+    _ad_a8_3 = (
+        '<a href="https://px.a8.net/svt/ejp?a8mat=4BACLE+8IM9BM+10SQ+BXQOH" rel="nofollow" target="_blank">'
+        '<img border="0" width="320" height="50" alt="" '
+        'src="https://www29.a8.net/svt/bgt?aid=260823362515&wid=001&eno=01&mid=s00000004769002005000&mc=1"></a>'
+        '<img border="0" width="1" height="1" '
+        'src="https://www13.a8.net/0.gif?a8mat=4BACLE+8IM9BM+10SQ+BXQOH" alt="">'
+    )
     _ad_html = (
         '<div class="mkp-ad-wrap">'
         '<p class="mkp-ad-label">スポンサーリンク</p>'
         '<div class="mkp-ad-row">'
+        '<span class="mkp-ad-item">' + _ad_a8_3 + '</span>'
         '<span class="mkp-ad-item">' + _ad_a8_1 + '</span>'
         '<span class="mkp-ad-item">' + _ad_a8_2 + '</span>'
         '</div></div>'
@@ -553,7 +819,7 @@ if not st.session_state.user:
     """, unsafe_allow_html=True)
 
     for _doc_name in LEGAL_DOC_FILES.keys():
-        with st.expander(f"📄 {_doc_name}"):
+        with st.expander(_doc_name, icon=":material/description:"):
             st.markdown(load_legal_doc(_doc_name))
 
     st.markdown("""
@@ -697,14 +963,19 @@ usage_data = get_user_usage(user_id)
 current_user_plan = usage_data["plan"]
 current_daily_usage = usage_data["count"]
 
-PLAN_LIMITS = {"Free": 1, "Pro": 10, "Max": 20}
+PLAN_LIMITS = {"Free": 1, "Pro": 10, "Max": 10}
 current_limit = PLAN_LIMITS[current_user_plan]
 
 TOTAL_TURNS = 10 if current_user_plan == "Max" else 4
 LLM_MODEL = "gpt-4o" if current_user_plan == "Max" else "gpt-4o-mini"
 MAX_INPUT_CHARS = 1500 if current_user_plan == "Max" else 900
 
-st.markdown(f'<h1 class="app-title">{app_icon}Mokipra - AI模擬面接パートナー</h1>', unsafe_allow_html=True)
+_masthead = (
+    '<div class="mkp-masthead">' + app_icon +
+    '<div><div class="mkp-masthead-name">Mokipra</div>'
+    '<div class="mkp-masthead-sub">AI 模擬面接パートナー</div></div></div>'
+)
+st.markdown(_masthead, unsafe_allow_html=True)
 
 if "setup_complete" not in st.session_state: st.session_state.setup_complete = False
 if "turn_count" not in st.session_state: st.session_state.turn_count = 0
@@ -713,27 +984,43 @@ if "audio_history" not in st.session_state: st.session_state.audio_history = []
 if "page_state" not in st.session_state: st.session_state.page_state = "setup"
 if "autoplay_latest" not in st.session_state: st.session_state.autoplay_latest = False
 if "has_voice_input" not in st.session_state: st.session_state.has_voice_input = False
+if "pending_transcript" not in st.session_state: st.session_state.pending_transcript = ""
+if "last_audio_digest" not in st.session_state: st.session_state.last_audio_digest = None
 if "ad_countdown_finished" not in st.session_state: st.session_state.ad_countdown_finished = False
 if "show_history" not in st.session_state: st.session_state.show_history = False
 
-INTERVIEWER_IMAGE = "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=800&q=80"
+# 面接官画像: リポジトリ内のオリジナル画像を優先し、無い場合のみ従来の外部画像を使う。
+#   interviewer.png をリポジトリ直下に置くと自動的に切り替わる。
+def get_interviewer_image_src():
+    for _fname in ("interviewer.png", "interviewer.jpg", "interviewer.jpeg"):
+        try:
+            with open(_fname, "rb") as _f:
+                _b64 = base64.b64encode(_f.read()).decode("utf-8")
+            _mime = "image/png" if _fname.endswith(".png") else "image/jpeg"
+            return f"data:{_mime};base64,{_b64}"
+        except Exception:
+            continue
+    return "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=800&q=80"
+
+INTERVIEWER_IMAGE = get_interviewer_image_src()
 
 # --- サイドバー ---
 with st.sidebar:
-    st.markdown("### 👤 Mokipra Dashboard")
+    st.markdown('<p class="mkp-eyebrow" style="margin-top:0;">DASHBOARD</p>', unsafe_allow_html=True)
     st.write(f"現在のプラン: **{current_user_plan}**")
     st.write(f"本日の使用状況: **{current_daily_usage} / {current_limit} 回**")
-    st.progress(min(1.0, current_daily_usage / current_limit if current_limit > 0 else 1.0))
+    render_gauge(current_daily_usage / current_limit if current_limit > 0 else 1.0,
+                 f"残り {max(0, current_limit - current_daily_usage)} 回")
     
     if current_user_plan in ["Free", "Pro"]:
         st.markdown("---")
-        st.markdown("#### 💎 プランのアップグレード")
+        st.markdown('<p class="mkp-eyebrow" style="margin-top:14px;">UPGRADE</p>', unsafe_allow_html=True)
         st.caption("Pro/Maxプランで面接回数と高度なフィードバックを解放！")
         
-        # 規約と同意チェックの展開
-        agree_sidebar = display_terms_and_checkbox("agree_sidebar")
-        
-        if agree_sidebar:
+        # 規約の展開表示（同意はStripe Checkout側で取得する）
+        display_terms_and_checkbox("agree_sidebar")
+
+        if True:
             if "sb_pro_url" not in st.session_state:
                 with st.spinner("リンク生成中..."):
                     pro_url, _ = create_checkout_session(user_id, "Pro")
@@ -742,14 +1029,12 @@ with st.sidebar:
                     if max_url: st.session_state["sb_max_url"] = max_url
 
             if current_user_plan == "Free" and "sb_pro_url" in st.session_state:
-                st.link_button("💎 Proプラン(480円/月)", st.session_state["sb_pro_url"], type="primary", use_container_width=True)
+                st.link_button("Proプラン  480円 / 月", st.session_state["sb_pro_url"], type="primary", use_container_width=True)
             if "sb_max_url" in st.session_state:
-                st.link_button("🔥 Maxプラン(980円/月)", st.session_state["sb_max_url"], type="primary", use_container_width=True)
-        else:
-            st.info("※同意にチェックすると課金リンクが表示されます")
+                st.link_button("Maxプラン  980円 / 月", st.session_state["sb_max_url"], type="primary", use_container_width=True)
             
     st.markdown("---")
-    with st.expander("📜 利用規約・法的情報"):
+    with st.expander("利用規約・法的情報", icon=":material/gavel:"):
         legal_page = st.radio(
             "表示する項目を選択",
             list(LEGAL_DOC_FILES.keys()),
@@ -759,7 +1044,7 @@ with st.sidebar:
         st.markdown(load_legal_doc(legal_page))
 
     st.markdown("---")
-    st.link_button("📝 バグ報告・ご要望はこちら", "https://forms.gle/uZkRncaJMA9SZw8j9", use_container_width=True)
+    st.link_button("バグ報告・ご要望", "https://forms.gle/uZkRncaJMA9SZw8j9", use_container_width=True, icon=":material/feedback:")
 
 # ====================================================
 # 【画面1】制限チェック ＆ 事前設定
@@ -770,9 +1055,9 @@ if st.session_state.page_state == "setup":
         st.info("💡 Proプランなら1日10回まで受講可能！アドバイスを踏まえて今すぐリベンジできます！")
         
         st.markdown("---")
-        agree_setup = display_terms_and_checkbox("agree_setup")
-        
-        if agree_setup:
+        display_terms_and_checkbox("agree_setup")
+
+        if True:
             if "setup_pro_url" not in st.session_state:
                 with st.spinner("決済リンクを安全に準備中..."):
                     pro_url, _ = create_checkout_session(user_id, "Pro")
@@ -783,34 +1068,33 @@ if st.session_state.page_state == "setup":
             if "setup_pro_url" in st.session_state and "setup_max_url" in st.session_state:
                 col_pay1, col_pay2 = st.columns(2)
                 with col_pay1:
-                    st.link_button("💎 Proプラン(480円)に登録して今すぐリベンジ", st.session_state["setup_pro_url"], type="primary", use_container_width=True)
+                    st.link_button("Proプランに登録して続ける", st.session_state["setup_pro_url"], type="primary", use_container_width=True)
                 with col_pay2:
-                    st.link_button("🔥 Maxプラン(980円)に登録", st.session_state["setup_max_url"], type="primary", use_container_width=True)
+                    st.link_button("Maxプランに登録", st.session_state["setup_max_url"], type="primary", use_container_width=True)
             else:
                 st.error("❌ 決済リンクの準備に失敗しました。")
-        else:
-            st.info("※ プランに登録するには、上記の同意事項にチェックを入れてください。")
             
     else:
         st.markdown("""
         <div class="glass-card">
-            <h3 style="margin-top:0; color:#0f172a;">🤖 面接の不安を、自信に変える。</h3>
-            <p style="color:#334155; margin-bottom:12px;">Mokipra（モキプラ）は、本番さながらの緊張感で練習できるAI模擬面接パートナーです。<br>面接終了後、AIが以下の項目を即座に解析し『総合評価シート』を作成します。</p>
-            <div style="margin-top:10px;">
-                <span class="feature-badge">💯 100点満点の総合採点</span>
-                <span class="feature-badge">🎯 良かった点・改善点の詳細分析</span>
-                <span class="feature-badge">🗣️ 話し方・スピードの印象診断</span>
+            <p class="mkp-eyebrow">TODAY'S SESSION</p>
+            <h3 style="margin:0 0 12px;">面接の不安を、自信に変える。</h3>
+            <p style="margin-bottom:16px;">本番さながらの緊張感で練習し、終了後は総合評価シートで振り返る。<br>評価は実際の選考基準に沿って、厳しく採点されます。</p>
+            <div style="margin-top:14px;">
+                <span class="feature-badge">100点満点の総合採点</span>
+                <span class="feature-badge">良かった点・改善点の分析</span>
+                <span class="feature-badge">話し方・スピードの診断</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
         
         if current_user_plan in ["Free", "Pro"]:
             st.markdown('<div class="glass-card" style="background: #f8fafc; border: 1px solid #cbd5e1;">', unsafe_allow_html=True)
-            st.markdown("<h4 style='margin-top:0;'>🚀 プランをアップグレードして機能を解放</h4>", unsafe_allow_html=True)
+            st.markdown("<p class='mkp-eyebrow' style='margin-top:0;'>UPGRADE</p><h4 style='margin:0 0 10px;'>プランを切り替えて機能を解放</h4>", unsafe_allow_html=True)
             
-            agree_inline = display_terms_and_checkbox("agree_inline")
-            
-            if agree_inline:
+            display_terms_and_checkbox("agree_inline")
+
+            if True:
                 col_up1, col_up2 = st.columns(2)
                 with col_up1:
                     if current_user_plan == "Free":
@@ -819,7 +1103,7 @@ if st.session_state.page_state == "setup":
                                 url, _ = create_checkout_session(user_id, "Pro")
                                 if url: st.session_state["inline_pro_url"] = url
                         if "inline_pro_url" in st.session_state:
-                            st.link_button("💎 Proプラン(480円/月)に登録", st.session_state["inline_pro_url"], type="primary", use_container_width=True)
+                            st.link_button("Proプラン  480円 / 月", st.session_state["inline_pro_url"], type="primary", use_container_width=True)
                     else:
                         st.info("あなたは現在Proプランをご利用中です。")
                 
@@ -829,48 +1113,47 @@ if st.session_state.page_state == "setup":
                             url, _ = create_checkout_session(user_id, "Max")
                             if url: st.session_state["inline_max_url"] = url
                     if "inline_max_url" in st.session_state:
-                        st.link_button("🔥 Maxプラン(980円/月)に登録", st.session_state["inline_max_url"], type="primary", use_container_width=True)
-            else:
-                st.info("※同意事項にチェックを入れるとアップグレード用のリンクが表示されます。")
+                        st.link_button("Maxプラン  980円 / 月", st.session_state["inline_max_url"], type="primary", use_container_width=True)
             st.markdown("</div>", unsafe_allow_html=True)
         
         st.markdown("""
         <div class="glass-card">
-            <h3 style="margin-top:0; color:#0f172a;">💎 プラン別 特典一覧</h3>
+            <p class="mkp-eyebrow">PLANS</p>
+            <h3 style="margin:0 0 16px;">プラン別 特典一覧</h3>
             <table style="width:100%; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
-                <tr style="border-bottom: 2px solid #cbd5e1;">
+                <tr style="border-bottom: 1px solid var(--line);">
                     <th style="padding: 10px;">プラン</th>
                     <th style="padding: 10px;">1日の面接回数</th>
                     <th style="padding: 10px;">ラリー回数</th>
                     <th style="padding: 10px;">面接官のレベル</th>
                     <th style="padding: 10px;">プロの模範解答(リライト)</th>
                 </tr>
-                <tr style="border-bottom: 1px solid #cbd5e1; background: #f8fafc;">
+                <tr style="border-bottom: 1px solid var(--line-soft); background: transparent;">
                     <td style="padding: 10px; font-weight:bold;">Free (無料)</td>
                     <td style="padding: 10px; font-weight:bold;">1回</td>
                     <td style="padding: 10px;">4回 (ショート)</td>
                     <td style="padding: 10px;">標準的な深掘り</td>
                     <td style="padding: 10px; color:#64748b;">❌ 講評のみ</td>
                 </tr>
-                <tr style="border-bottom: 1px solid #cbd5e1; background: #eff6ff;">
-                    <td style="padding: 10px; font-weight:bold; color:#2563eb;">Pro (480円)</td>
-                    <td style="padding: 10px; color:#2563eb; font-weight:bold;">10回</td>
-                    <td style="padding: 10px; color:#2563eb;">4回 (ショート)</td>
-                    <td style="padding: 10px; color:#2563eb;">標準的な深掘り</td>
-                    <td style="padding: 10px; color:#2563eb; font-weight:bold;">✅ 全回答リライト付き</td>
+                <tr style="border-bottom: 1px solid #cbd5e1; background: var(--ai-wash);">
+                    <td style="padding: 10px; font-weight:bold; color:var(--ai);">Pro (480円)</td>
+                    <td style="padding: 10px; color:var(--ai); font-weight:bold;">10回</td>
+                    <td style="padding: 10px; color:var(--ai);">4回 (ショート)</td>
+                    <td style="padding: 10px; color:var(--ai);">標準的な深掘り</td>
+                    <td style="padding: 10px; color:var(--ai); font-weight:bold;">✅ 全回答リライト付き</td>
                 </tr>
-                <tr style="background: #fff7ed;">
-                    <td style="padding: 10px; font-weight:bold; color:#ea580c;">Max (980円)</td>
-                    <td style="padding: 10px; color:#ea580c; font-weight:bold;">20回</td>
-                    <td style="padding: 10px; color:#ea580c; font-weight:bold;">10回 (本格面接)</td>
-                    <td style="padding: 10px; color:#ea580c; font-weight:bold;">役員クラスの鋭い圧迫・専門面接 / ES読込</td>
-                    <td style="padding: 10px; color:#ea580c; font-weight:bold;">✅ 全回答リライト付き</td>
+                <tr style="background: var(--seal-wash);">
+                    <td style="padding: 10px; font-weight:bold; color:var(--seal);">Max (980円)</td>
+                    <td style="padding: 10px; color:var(--seal); font-weight:bold;">10回</td>
+                    <td style="padding: 10px; color:var(--seal); font-weight:bold;">10回 (本格面接)</td>
+                    <td style="padding: 10px; color:var(--seal); font-weight:bold;">役員クラスの鋭い圧迫・専門面接 / ES読込</td>
+                    <td style="padding: 10px; color:var(--seal); font-weight:bold;">✅ 全回答リライト付き</td>
                 </tr>
             </table>
         </div>
         """, unsafe_allow_html=True)
         
-        st.markdown('<div class="glass-card"><h3 style="margin-top:0;">📋 シチュエーション設定</h3><p>練習したい面接の種別と業界を選択してください。</p>', unsafe_allow_html=True)
+        st.markdown('<div class="glass-card"><p class="mkp-eyebrow">SETUP</p><h3 style="margin:0 0 8px;">シチュエーション設定</h3><p>練習したい面接の種別と業界を選んでください。</p>', unsafe_allow_html=True)
         if lottie_interview: st_lottie(lottie_interview, height=160, key="interview_anim")
         
         col_m1, col_m2 = st.columns(2)
@@ -881,7 +1164,7 @@ if st.session_state.page_state == "setup":
             
         st.markdown("<hr style='margin:15px 0;'>", unsafe_allow_html=True)
         is_max = current_user_plan == "Max"
-        st.markdown("#### 💎 Maxプラン限定カスタマイズ")
+        st.markdown('<p class="mkp-eyebrow" style="margin-top:18px;">MAX ONLY</p>', unsafe_allow_html=True)
         
         col_m3, col_m4 = st.columns(2)
         with col_m3:
@@ -905,7 +1188,7 @@ if st.session_state.page_state == "setup":
         if not is_max: st.caption("🔒 Maxプランにアップグレードすると、面接官の性格変更や書類(PDF)の読み込み機能が解放されます！")
         st.markdown("</div>", unsafe_allow_html=True)
     
-        if st.button("🚀 面接をスタートする", type="primary", use_container_width=True):
+        if st.button("面接をスタートする", type="primary", use_container_width=True, icon=":material/play_arrow:"):
             st.session_state.show_history = False
     
             is_grad_school = "大学院" in interview_mode or "推薦" in interview_mode
@@ -973,6 +1256,8 @@ if st.session_state.page_state == "setup":
             st.session_state.interview_context = f"{interview_mode} ({industry_mode})"
             st.session_state.turn_count = 0
             st.session_state.has_voice_input = False
+            st.session_state.pending_transcript = ""
+            st.session_state.last_audio_digest = None
             
             with st.spinner("面接官が入室しています..."):
                 try:
@@ -1005,24 +1290,19 @@ if st.session_state.page_state == "setup":
 # ====================================================
 elif st.session_state.page_state == "interview":
     
-    st.html("""
-    <style>
-    [data-testid="column"]:nth-of-type(1), [data-testid="column"]:nth-of-type(3) { position: sticky; top: 2rem; align-self: flex-start; z-index: 999; }
-    </style>
-    """)
-
     left_col, center_col, right_col = st.columns([0.7, 1.6, 0.7], gap="medium")
 
     with right_col:
+        st.markdown('<span class="mkp-stick"></span>', unsafe_allow_html=True)
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.markdown("<h5 style='margin:0 0 10px 0;'>📹 セルフミラー</h5>", unsafe_allow_html=True)
+        st.markdown("<p class='mkp-eyebrow' style='margin:0 0 10px 0;'>SELF MIRROR</p>", unsafe_allow_html=True)
         st.components.v1.html("""
         <div style="text-align: center; font-family: sans-serif;">
-            <button onclick="toggleCamera()" style="margin-bottom: 10px; font-size: 0.9rem; padding: 8px 16px; font-weight: bold; border-radius: 8px; border: 1px solid #cbd5e1; background: #2563eb; color: white; cursor: pointer;">📸 カメラをオン / オフにする</button>
+            <button onclick="toggleCamera()" style="margin-bottom: 10px; font-size: 0.9rem; padding: 8px 16px; font-weight: bold; border-radius: 8px; border: 1px solid #22385C; background: #22385C; color: white; cursor: pointer; letter-spacing:.06em;">カメラをオン / オフ</button>
             <br>
-            <video id="webcam" autoplay playsinline muted style="width: 100%; height: 140px; object-fit: cover; border-radius: 12px; background: #1e293b; border: 2px solid #64748b; display: none;"></video>
+            <video id="webcam" autoplay playsinline muted style="width: 100%; height: 140px; object-fit: cover; border-radius: 8px; background: #1B1E21; border: 1px solid #E0E0D8; display: none;"></video>
             <br>
-            <button id="pip-btn" onclick="document.getElementById('webcam').requestPictureInPicture()" style="margin-top: 5px; font-size: 0.85rem; padding: 6px 12px; font-weight: bold; border-radius: 8px; border: 1px solid #cbd5e1; background: #ffffff; cursor: pointer; display: none;">💻 ワイプ表示 (PiP)</button>
+            <button id="pip-btn" onclick="document.getElementById('webcam').requestPictureInPicture()" style="margin-top: 5px; font-size: 0.85rem; padding: 6px 12px; font-weight: bold; border-radius: 8px; border: 1px solid #cbd5e1; background: #ffffff; cursor: pointer; display: none;">ワイプ表示 (PiP)</button>
         </div>
         <script>
             let stream = null;
@@ -1050,13 +1330,24 @@ elif st.session_state.page_state == "interview":
         st.caption("※ ワイプ表示(PiP)にすると別タブでも最前面に固定されます。")
         st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown(f'<div class="glass-card"><h4>📊 Status</h4><p><span class="status-badge">{st.session_state.interview_context}</span></p><p>進行状況: {st.session_state.turn_count} / {TOTAL_TURNS}</p></div>', unsafe_allow_html=True)
-        st.progress(min(1.0, st.session_state.turn_count / TOTAL_TURNS))
+        _status_html = (
+            '<div class="glass-card" style="padding:20px 22px;">'
+            '<p class="mkp-eyebrow">PROGRESS</p>'
+            '<p style="margin:0 0 12px;"><span class="status-badge">'
+            + str(st.session_state.interview_context) + '</span></p>'
+            '<p style="margin:0; font-family:var(--serif); font-size:1.5rem; font-weight:800; color:var(--ink) !important;">'
+            + str(st.session_state.turn_count) +
+            '<span style="font-size:.9rem; color:var(--muted) !important; font-weight:500;"> / '
+            + str(TOTAL_TURNS) + ' 問</span></p></div>'
+        )
+        st.markdown(_status_html, unsafe_allow_html=True)
+        render_gauge(st.session_state.turn_count / TOTAL_TURNS)
 
     with left_col:
+        st.markdown('<span class="mkp-stick"></span>', unsafe_allow_html=True)
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.markdown("<h5 style='margin-top:0; color:#0f172a;'>🏢 担当面接官</h5>", unsafe_allow_html=True)
-        st.markdown(f'<img src="{INTERVIEWER_IMAGE}" width="100%" style="border-radius:16px; border: 3px solid #2563eb;">', unsafe_allow_html=True)
+        st.markdown("<p class='mkp-eyebrow' style='margin-top:0;'>INTERVIEWER</p>", unsafe_allow_html=True)
+        st.markdown(f'<img src="{INTERVIEWER_IMAGE}" width="100%" style="border-radius:8px; border:1px solid var(--line); display:block;">', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     with center_col:
@@ -1072,7 +1363,7 @@ elif st.session_state.page_state == "interview":
             audio_idx = 0
             for msg in st.session_state.messages:
                 if msg["role"] != "system" and not msg["content"].startswith("【総合面接結果報告書】"):
-                    avatar_icon = "👔" if msg["role"] == "assistant" else "👤"
+                    avatar_icon = AVATAR_AI if msg["role"] == "assistant" else AVATAR_USER
                     with st.chat_message(msg["role"], avatar=avatar_icon):
                         display_text = re.sub(r'\(※入力:.*?\)', '', msg["content"])
                         st.markdown(display_text)
@@ -1089,15 +1380,15 @@ elif st.session_state.page_state == "interview":
 
             if st.session_state.turn_count >= TOTAL_TURNS:
                 st.markdown("---")
-                if st.button("✅ 面接お疲れ様でした。結果を確認する ➔", type="primary", use_container_width=True):
+                if st.button("面接を終える／結果を見る", type="primary", use_container_width=True, icon=":material/task_alt:"):
                     st.session_state.page_state = "ad_wait"
                     st.rerun()
             else:
                 st.markdown("---")
                 st.iframe("""
-                <div style="text-align: center; background: #ffffff; padding: 10px; border-radius: 12px; border: 1px solid #cbd5e1; box-shadow: 0 2px 6px rgba(0,0,0,0.03);">
-                    <span style="font-size: 0.85rem; color: #475569; font-weight: bold;">⏱️ 思考・回答時間タイマー</span>
-                    <div id="js-timer" style="font-size: 1.8rem; font-weight: 800; color: #2563eb; margin-top: 2px;">00:00</div>
+                <div style="text-align: center; background: #ffffff; padding: 12px; border-radius: 8px; border: 1px solid #E0E0D8; font-family: system-ui, sans-serif;">
+                    <span style="font-size: 0.66rem; color: #8B9096; font-weight: 700; letter-spacing: .22em;">RESPONSE TIME</span>
+                    <div id="js-timer" style="font-size: 1.9rem; font-weight: 800; color: #22385C; margin-top: 2px; font-family: serif;">00:00</div>
                 </div>
                 <script>
                     var seconds = 0; setInterval(function() { seconds++; var m = Math.floor(seconds/60); var s = seconds%60;
@@ -1105,16 +1396,72 @@ elif st.session_state.page_state == "interview":
                 </script>
                 """, height=85)
 
-                st.info("🚧 現在マイクでの音声入力機能はメンテナンス中です。下のテキストボックスから回答を入力してください。")
-                audio = None
-                
                 user_text = None
                 input_method = "text"
 
-                text_input = st.chat_input("テキストで回答を入力...", max_chars=MAX_INPUT_CHARS)
-                if text_input: 
-                    user_text = text_input
-                    input_method = "text"
+                # ---- 入力方法の切り替え（音声 / テキスト）----
+                answer_mode = st.radio(
+                    "回答方法",
+                    ["🎤 音声で回答", "⌨️ テキストで回答"],
+                    horizontal=True,
+                    key=f"answer_mode_{st.session_state.turn_count}",
+                    label_visibility="collapsed",
+                )
+
+                if answer_mode == "🎤 音声で回答":
+                    st.caption("マイクのアイコンを押して録音を開始し、話し終えたら停止してください。本番同様、声に出して答える練習ができます。")
+
+                    audio_value = st.audio_input(
+                        "回答を録音する",
+                        key=f"audio_in_{st.session_state.turn_count}",
+                        label_visibility="collapsed",
+                    )
+
+                    if audio_value is not None:
+                        audio_bytes = audio_value.getvalue()
+                        # 同じ録音をStreamlitの再実行のたびに再変換しないよう、内容ハッシュで判定する
+                        audio_digest = hashlib.md5(audio_bytes).hexdigest()
+                        if st.session_state.get("last_audio_digest") != audio_digest:
+                            with st.spinner("音声を文字に起こしています..."):
+                                transcribed, stt_error = transcribe_audio(audio_bytes)
+                            st.session_state.last_audio_digest = audio_digest
+                            if stt_error:
+                                st.session_state.pending_transcript = ""
+                                st.warning(f"⚠️ {stt_error}")
+                            else:
+                                st.session_state.pending_transcript = transcribed[:MAX_INPUT_CHARS]
+
+                    if st.session_state.get("pending_transcript"):
+                        st.markdown("**認識結果**（誤変換があればそのまま修正できます）")
+                        edited_text = st.text_area(
+                            "認識結果",
+                            value=st.session_state.pending_transcript,
+                            height=140,
+                            max_chars=MAX_INPUT_CHARS,
+                            key=f"stt_edit_{st.session_state.turn_count}",
+                            label_visibility="collapsed",
+                        )
+                        col_send, col_redo = st.columns([3, 1])
+                        with col_send:
+                            if st.button("この内容で回答する", type="primary", use_container_width=True, icon=":material/send:",
+                                         key=f"send_voice_{st.session_state.turn_count}"):
+                                if edited_text.strip():
+                                    user_text = edited_text.strip()
+                                    input_method = "voice"
+                                    st.session_state.has_voice_input = True
+                                else:
+                                    st.warning("⚠️ 回答が空です。録音し直すか、テキストを入力してください。")
+                        with col_redo:
+                            if st.button("録り直す", use_container_width=True, icon=":material/mic:",
+                                         key=f"redo_voice_{st.session_state.turn_count}"):
+                                st.session_state.pending_transcript = ""
+                                st.session_state.last_audio_digest = None
+                                st.rerun()
+                else:
+                    text_input = st.chat_input("テキストで回答を入力...", max_chars=MAX_INPUT_CHARS)
+                    if text_input:
+                        user_text = text_input
+                        input_method = "text"
 
                 if user_text:
                     if len(user_text) > MAX_INPUT_CHARS:
@@ -1123,13 +1470,16 @@ elif st.session_state.page_state == "interview":
 
                     elapsed_time = int(time.time() - st.session_state.start_time)
                     st.session_state.turn_count += 1
+                    # 次ターンに前回の文字起こしが残らないようクリアする
+                    st.session_state.pending_transcript = ""
+                    st.session_state.last_audio_digest = None
                     meta_info = f"(※入力: 音声, 文字数: {len(user_text)}文字, 回答時間: {elapsed_time}秒)" if input_method == "voice" else f"(※入力: テキスト, 回答時間: {elapsed_time}秒)"
                     st.session_state.messages.append({"role": "user", "content": f"{user_text} {meta_info}"})
 
-                    with st.chat_message("user", avatar="👤"):
+                    with st.chat_message("user", avatar=AVATAR_USER):
                         st.markdown(f"{user_text} \n\n*(⏱️ タイム: {elapsed_time}秒)*")
 
-                    with st.chat_message("assistant", avatar="👔"):
+                    with st.chat_message("assistant", avatar=AVATAR_AI):
                         with st.spinner("面接官が回答を考案中..."):
                             try:
                                 if st.session_state.turn_count >= TOTAL_TURNS:
@@ -1165,7 +1515,7 @@ elif st.session_state.page_state == "interview":
 
         elif selected_tab == "📈 マイページ (成績)":
             st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-            st.markdown("<h4>📈 過去の面接スコア推移</h4>", unsafe_allow_html=True)
+            st.markdown('<p class="mkp-eyebrow" style="margin-top:0;">HISTORY</p><h4 style="margin:0 0 12px;">スコアの推移</h4>', unsafe_allow_html=True)
             db_history = get_interview_history(user_id)
             if db_history:
                 scores = [h["score"] for h in reversed(db_history)]
@@ -1179,12 +1529,22 @@ elif st.session_state.page_state == "interview":
 # 【画面3】動画広告・待機画面
 # ====================================================
 elif st.session_state.page_state == "ad_wait":
-    st.balloons()
-    st.markdown('<div class="glass-card" style="text-align:center;"><h2>AIが評価シートを作成中です...✍️</h2>', unsafe_allow_html=True)
+    st.markdown('<div class="glass-card" style="text-align:center;">'
+                '<p class="mkp-eyebrow">EVALUATING</p>'
+                '<h2 style="margin:0;">評価シートを作成しています</h2>', unsafe_allow_html=True)
     
     st.markdown("""
-    <div style="background: #f0f9ff; border: 1px solid #bae6fd; padding: 12px; border-radius: 12px; margin: 15px 0;">
-        <p style="margin:0; font-size:1.05rem; color:#0369a1; font-weight:bold;">待っている間に、こちらもチェック💡</p>
+    <div style="border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+                padding: 20px 0 18px; margin: 24px 0;">
+        <p class="mkp-ad-label" style="margin:0 0 12px !important;">スポンサーリンク</p>
+        <p style="margin:0 0 6px; font-family: var(--serif); font-size: 1.08rem;
+                  font-weight: 700; color: var(--ink) !important;">
+            レポートができるまで、あと少し。
+        </p>
+        <p style="margin:0; font-size: .87rem; color: var(--ink-soft) !important; line-height: 1.9;">
+            この時間を使って、就職・転職活動に役立つサービスをのぞいてみませんか。<br>
+            気になるものがあれば、バナーから内容をご確認いただけます。登録は無料のものが中心です。
+        </p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1200,11 +1560,48 @@ elif st.session_state.page_state == "ad_wait":
     <img border="0" width="1" height="1" src="https://www18.a8.net/0.gif?a8mat=4BA41A+ABII9E+408S+5ZMCH" alt="">
     """
 
+    ad_3_html = (
+        '<a href="https://px.a8.net/svt/ejp?a8mat=4BACLE+8IM9BM+10SQ+C0B9T" rel="nofollow" target="_blank">'
+        '<img border="0" width="300" height="250" alt="" '
+        'src="https://www20.a8.net/svt/bgt?aid=260823362515&wid=001&eno=01&mid=s00000004769002017000&mc=1"></a>'
+        '<img border="0" width="1" height="1" '
+        'src="https://www16.a8.net/0.gif?a8mat=4BACLE+8IM9BM+10SQ+C0B9T" alt="">'
+    )
+
     col_dummy1, col_ad1, col_ad2, col_dummy2 = st.columns([1, 2, 2, 1])
     with col_ad1:
-        st.markdown(f"<p style='font-size:0.95rem; font-weight:bold; margin-bottom:2px;'>📝 キャリアの可能性を広げる</p>{ad_1_html}", unsafe_allow_html=True)
+        st.markdown(
+            "<p class='mkp-eyebrow'>SPONSORED 01</p>"
+            "<p style='margin:0 0 10px; font-size:.9rem; font-weight:700;'>"
+            "キャリアの選択肢を広げる</p>" + ad_1_html
+            + "<p style='margin:8px 0 0; font-size:.78rem; color:var(--muted) !important;'>"
+              "バナーをクリックすると詳細ページが開きます</p>",
+            unsafe_allow_html=True,
+        )
     with col_ad2:
-        st.markdown(f"<p style='font-size:0.95rem; font-weight:bold; margin-bottom:2px;'>📚 スキルアップでアピール</p>{ad_2_html}", unsafe_allow_html=True)
+        st.markdown(
+            "<p class='mkp-eyebrow'>SPONSORED 02</p>"
+            "<p style='margin:0 0 10px; font-size:.9rem; font-weight:700;'>"
+            "スキルを身につけて差をつける</p>" + ad_2_html
+            + "<p style='margin:8px 0 0; font-size:.78rem; color:var(--muted) !important;'>"
+              "バナーをクリックすると詳細ページが開きます</p>",
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("<div style='height: 26px;'></div>", unsafe_allow_html=True)
+
+    col_dummy3, col_ad3, col_dummy4 = st.columns([1, 2, 1])
+    with col_ad3:
+        st.markdown(
+            "<div style='text-align:center;'>"
+            "<p class='mkp-eyebrow'>SPONSORED 03</p>"
+            "<p style='margin:0 0 12px; font-size:.9rem; font-weight:700;'>"
+            "就職・転職をお考えの方へ</p>"
+            + ad_3_html
+            + "<p style='margin:10px 0 0; font-size:.78rem; color:var(--muted) !important;'>"
+              "バナーをクリックすると詳細ページが開きます</p></div>",
+            unsafe_allow_html=True,
+        )
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -1217,7 +1614,7 @@ elif st.session_state.page_state == "ad_wait":
 
     countdown_placeholder.empty()
 
-    if st.button("📊 レポート作成完了！結果を確認する ➔", type="primary", use_container_width=True):
+    if st.button("評価レポートを開く", type="primary", use_container_width=True, icon=":material/description:"):
         st.session_state.ad_countdown_finished = False
         st.session_state.page_state = "result"
         st.rerun()
@@ -1227,7 +1624,11 @@ elif st.session_state.page_state == "ad_wait":
 # 【画面4】評価結果専用ページ
 # ====================================================
 elif st.session_state.page_state == "result":
-    st.markdown("<h2>📄 総合面接結果報告書</h2>", unsafe_allow_html=True)
+    st.markdown(
+        '<p class="mkp-eyebrow" style="margin-top:8px;">EVALUATION REPORT</p>'
+        '<h2 style="margin:0 0 24px;">総合面接結果報告書</h2>',
+        unsafe_allow_html=True,
+    )
     
     if "final_eval" not in st.session_state:
         with st.spinner("評価シートを生成中..."):
@@ -1304,12 +1705,30 @@ elif st.session_state.page_state == "result":
 これまでのやり取り（回答時間・専門性・言葉の細部を含む）を極めて厳格に評価し、マークダウン形式で『総合面接結果報告書』を出力してください。
 対象面接: 【{st.session_state.get('interview_context', '')}】
 
-【採点基準（鬼厳格基準）】
-・ユーザーがふざけている、全く関係のない話題を出している、または極端に短い回答しかしていない場合は、容赦なく【0点〜20点】の超低評価を下してください。
-・【0〜30点】: 抽象論のみ、質問の意図無視、事実誤認、回答時間が極端に長い。
-・【31〜55点】: 平均的・無難だが独自性や具体例がなく、選考通過ラインに達していない。
-・【56〜75点】: 具体例や論理が整っており合格圏内。
-・【76〜100点】: 完璧な論理性、専門性、回答テンポを備えた傑出した受け答え。本当に非の打ち所がない完璧な回答でなければ80点以上は絶対につけないでください。
+【採点基準（超厳格・実選考基準）】
+あなたは大手企業・難関大学院の選考を数百人単位で見てきた選考官です。
+「練習だから」という理由で点を甘くすることは絶対に禁止します。
+甘い評価はユーザーを本番で不合格にする最大の裏切りだと認識してください。
+
+・ユーザーがふざけている、全く関係のない話題を出している、または極端に短い回答しかしていない場合は、容赦なく【0点〜15点】の超低評価を下してください。
+・【0〜25点】: 抽象論のみ、質問の意図を取り違えている、事実誤認がある、回答が成立していない。
+・【26〜45点】: 一応答えてはいるが、具体例がない／数値がない／誰でも言える内容。実際の選考では書類段階で落ちる水準。
+・【46〜60点】: 平均的。可もなく不可もなく、面接官の記憶に一切残らない。選考通過ラインには達していない。
+・【61〜75点】: 具体例と論理構造が備わっており、ようやく選考通過が見えてくる水準。
+・【76〜85点】: 一貫した論理、具体的な数値・エピソード、質問意図への的確な応答が揃っている優秀な受け答え。
+・【86〜100点】: 選考官が思わずメモを取るレベル。独自性・再現性・説得力のすべてが揃っている。この帯は年に数人しか出ません。
+
+【減点を必ず適用すること】
+・具体的な固有名詞・数値・期間が1つも含まれていない回答は、内容が良くても最大60点までとする。
+・「頑張りました」「意識しました」など主観的な形容だけで、行動の中身が説明されていない場合は必ず減点する。
+・質問に対して直接答えず、周辺情報だけを述べている場合は大幅に減点する。
+・同じ主張の言い換えを繰り返しているだけの回答は、長さに関わらず減点する。
+・回答時間が極端に長い（1回あたり180秒超）、または極端に短い（15秒未満）場合は、実際の面接での印象として必ず言及し減点材料とする。
+
+【点数分布の目安】
+初めて練習するユーザーの大半は40〜60点台に収まるはずです。
+70点以上は明確に優れた点がある場合のみ、85点以上はほぼ非の打ち所がない場合のみ付けてください。
+迷ったら必ず低い方の点数を選んでください。
 
 {format_instruction}
 
@@ -1355,6 +1774,7 @@ elif st.session_state.page_state == "result":
                 st.session_state.final_eval = eval_text
                 match = re.search(r'スコア[^\d]*(\d{1,3})', eval_text)
                 score = int(match.group(1)) if match else 50
+                st.session_state.final_score = score
                 save_interview_history(user_id, score, st.session_state.interview_context)
             
             except openai.RateLimitError:
@@ -1364,19 +1784,46 @@ elif st.session_state.page_state == "result":
                 st.error("⚠️ 通信エラーが発生しました。もう一度お試しください。")
                 st.stop()
 
+    _score = st.session_state.get("final_score")
+    if _score is None:
+        _m = re.search(r'スコア[^\d]*(\d{1,3})', st.session_state.final_eval)
+        _score = int(_m.group(1)) if _m else None
+
+    if _score is not None:
+        if _score >= 76:
+            _verdict = "選考を通過できる水準です"
+        elif _score >= 61:
+            _verdict = "通過ラインが見えてきました"
+        elif _score >= 46:
+            _verdict = "まだ印象に残る回答ではありません"
+        else:
+            _verdict = "組み立てから見直しましょう"
+        _seal_html = (
+            '<div class="glass-card"><div class="mkp-seal-wrap">'
+            '<div class="mkp-seal">'
+            '<span class="mkp-seal-num">' + str(_score) + '</span>'
+            '<span class="mkp-seal-unit">/ 100</span>'
+            '</div>'
+            '<div class="mkp-seal-label">'
+            '<p class="mkp-eyebrow">TOTAL SCORE</p>'
+            '<h3>' + _verdict + '</h3>'
+            '</div></div></div>'
+        )
+        st.markdown(_seal_html, unsafe_allow_html=True)
+
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     st.markdown(st.session_state.final_eval, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
     
-    st.markdown("### 💬 面接の振り返り")
-    if st.button("📝 面接の会話履歴を表示 / 非表示", use_container_width=True):
+    st.markdown('<p class="mkp-eyebrow" style="margin-top:26px;">REVIEW</p><h3 style="margin:0 0 12px;">面接の振り返り</h3>', unsafe_allow_html=True)
+    if st.button("会話の記録を開く / 閉じる", use_container_width=True, icon=":material/forum:"):
         st.session_state.show_history = not st.session_state.get("show_history", False)
         
     if st.session_state.get("show_history", False):
         st.markdown('<div class="glass-card" style="max-height: 400px; overflow-y: auto; background: #ffffff;">', unsafe_allow_html=True)
         for msg in st.session_state.messages:
             if msg["role"] != "system" and not msg["content"].startswith("【総合面接結果報告書】"):
-                avatar_icon = "👔" if msg["role"] == "assistant" else "👤"
+                avatar_icon = AVATAR_AI if msg["role"] == "assistant" else AVATAR_USER
                 with st.chat_message(msg["role"], avatar=avatar_icon):
                     display_text = re.sub(r'\(※入力:.*?\)', '', msg["content"])
                     st.markdown(display_text)
@@ -1386,9 +1833,9 @@ elif st.session_state.page_state == "result":
         st.markdown("---")
         st.warning("💡 **アドバイスを踏まえて、今すぐ次の面接でリベンジしてみませんか？**\n\nProプランにアップグレードすると、**1日10回まで練習可能**＆プロの**模範解答（リライト）**が解放されます！")
         
-        agree_result = display_terms_and_checkbox("agree_result")
-        
-        if agree_result:
+        display_terms_and_checkbox("agree_result")
+
+        if True:
             if "result_pro_url" not in st.session_state:
                 with st.spinner("決済リンクを準備中..."):
                     pro_url, _ = create_checkout_session(user_id, "Pro")
@@ -1399,12 +1846,10 @@ elif st.session_state.page_state == "result":
             col_pay1, col_pay2 = st.columns(2)
             with col_pay1:
                 if "result_pro_url" in st.session_state:
-                    st.link_button("💎 Proプラン(480円)決済へ進む", st.session_state["result_pro_url"], type="primary", use_container_width=True)
+                    st.link_button("Proプランの手続きへ", st.session_state["result_pro_url"], type="primary", use_container_width=True)
             with col_pay2:
                 if "result_max_url" in st.session_state:
-                    st.link_button("🔥 Maxプラン(980円)決済へ進む", st.session_state["result_max_url"], type="primary", use_container_width=True)
-        else:
-            st.info("※ プランに登録するには、上記の同意事項にチェックを入れてください。")
+                    st.link_button("Maxプランの手続きへ", st.session_state["result_max_url"], type="primary", use_container_width=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
     
@@ -1412,9 +1857,9 @@ elif st.session_state.page_state == "result":
         st.markdown("---")
         st.info("🔥 **さらに高度な面接対策が必要ですか？**\n\nMaxプランにアップグレードすると、**10ターンの本格面接**、**役員クラスの厳格な深掘り**、**ES/研究計画書の読み込み**が解放されます！")
         
-        agree_result_max = display_terms_and_checkbox("agree_result_max")
-        
-        if agree_result_max:
+        display_terms_and_checkbox("agree_result_max")
+
+        if True:
             if "upsell_max_url" not in st.session_state:
                 with st.spinner("決済リンクを準備中..."):
                     max_url, err_msg = create_checkout_session(user_id, "Max")
@@ -1424,18 +1869,16 @@ elif st.session_state.page_state == "result":
                         st.error(f"❌ 生成失敗: {err_msg}")
                         
             if "upsell_max_url" in st.session_state:
-                st.link_button("🔥 Maxプラン(980円)決済画面へ進む（Stripe）", st.session_state["upsell_max_url"], type="primary", use_container_width=True)
-        else:
-            st.info("※ プランをアップグレードするには、上記の同意事項にチェックを入れてください。")
+                st.link_button("Maxプランの手続きへ", st.session_state["upsell_max_url"], type="primary", use_container_width=True)
         
         st.markdown("<br>", unsafe_allow_html=True)
 
-    if st.button("🔄 ホームに戻って新しい面接を開始する", type="primary", use_container_width=True):
+    if st.button("新しい面接を始める", type="primary", use_container_width=True, icon=":material/refresh:"):
         st.session_state.setup_complete = False
         st.session_state.turn_count = 0
         
         # 不要なセッションのクリーンアップ
-        keys_to_clear = ["final_eval", "result_pro_checkout_url", "result_max_checkout_url", "upsell_max_url", "result_pro_url", "result_max_url"]
+        keys_to_clear = ["final_eval", "final_score", "result_pro_checkout_url", "result_max_checkout_url", "upsell_max_url", "result_pro_url", "result_max_url"]
         for key in keys_to_clear:
             if key in st.session_state:
                 del st.session_state[key]
