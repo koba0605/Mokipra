@@ -31,19 +31,23 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ===== Google Analytics =====
-st.html("""
-<!-- Google Analytics -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-H98Q6ZRT26"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-H98Q6ZRT26');
-</script>
-<!-- Google Search Console メタタグ -->
-<meta name="google-site-verification" content="2n0R0utRpWfk-PmJHXBoyiYdafEEyfe84CzpQK5GWDs" />
-""")
+# ==============================================================================
+# 1.3 検索結果まわりの補助タグ
+#    Streamlit は <head> を操作できないため、ここで挿入したタグが
+#    クローラーに読まれる保証はない。あくまで補助的な位置づけ。
+#    - GA の <script> は innerHTML 経由では実行されない（既知の制約）
+#    - GSC の所有権確認は DNS TXT レコードで完了済みのため、メタタグは不要
+#    ファビコンは static/ を直接配信し、クローラーが取得できるURLを用意する。
+# ==============================================================================
+_FAVICON_URL = "/app/static/favicon.png"
+
+st.html(
+    '<link rel="icon" type="image/png" sizes="192x192" href="/app/static/favicon-192.png">'
+    '<link rel="icon" type="image/png" sizes="96x96" href="/app/static/favicon-96.png">'
+    '<link rel="icon" type="image/png" sizes="48x48" href="/app/static/favicon-48.png">'
+    '<link rel="shortcut icon" type="image/png" href="/app/static/favicon.png">'
+    '<link rel="apple-touch-icon" sizes="180x180" href="/app/static/apple-touch-icon.png">'
+)
 # ==============================================================================
 # 1.4 シークレット取得ヘルパー
 #    st.secrets は secrets.toml が1つも存在しない環境（Render 等）では、
