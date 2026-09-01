@@ -21,7 +21,7 @@ jobs:
           sudo apt-get install -y postgresql-common
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
           sudo apt-get install -y postgresql-client-17
-          pg_dump --version
+          /usr/lib/postgresql/17/bin/pg_dump --version
 
       - name: Dump database
         env:
@@ -31,7 +31,7 @@ jobs:
           STAMP=$(date -u +"%Y%m%d")
           echo "STAMP=$STAMP" >> "$GITHUB_ENV"
 
-          pg_dump "$DB_URL" \
+          /usr/lib/postgresql/17/bin/pg_dump "$DB_URL" \
             --no-owner \
             --no-privileges \
             --clean \
