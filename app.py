@@ -929,6 +929,7 @@ def get_interview_history(uid):
 def create_checkout_session(user_id, plan_type):
     api_key = get_secret("STRIPE_SECRET_KEY", "")
     stripe.api_key = api_key
+    subscription_data={"metadata": {"user_id": user_id}},
     
     if not stripe.api_key:
         return None, "STRIPE_SECRET_KEY が設定されていません。"
