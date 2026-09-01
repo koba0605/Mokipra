@@ -17,10 +17,12 @@ app = FastAPI()
 
 PLAN_WEIGHTS = {"Free": 0, "Pro": 1, "Max": 2}
 
+
 # Render死活監視用ヘルスチェック
 @app.get("/")
 def health_check():
     return {"status": "ok"}
+
 
 @app.post("/webhook")
 async def stripe_webhook(request: Request):
@@ -36,22 +38,20 @@ async def stripe_webhook(request: Request):
         logger.error("Invalid signature detected.")
         raise HTTPException(status_code=400, detail="Invalid signature")
 
+    # ① 決済完了時の処理（Pro / Max へのアップグレード）
     if event['type'] == 'checkout.session.completed':
         session = event['data']['object']
-        
-        # ★ 修正: getattr() を使い、Stripeオブジェクトから「安全に」値を取り出す
+
         user_id = getattr(session, 'client_reference_id', None)
-        
-        # metadataも同様に安全に取得
         metadata = getattr(session, 'metadata', None)
         new_plan = getattr(metadata, 'plan', None) if metadata else None
 
-        # メタデータがない場合のフォールバック（こちらも全て安全な取得方式に統一）
+        # Price判定のフォールバック
         if not new_plan:
             amount = getattr(session, 'amount_total', 0)
             currency = getattr(session, 'currency', 'jpy')
             currency = currency.lower() if currency else 'jpy'
-            
+
             if currency in ['jpy', 'usd']:
                 new_plan = "Pro" if amount == 480 else "Max" if amount == 980 else "Free"
             else:
@@ -59,20 +59,47 @@ async def stripe_webhook(request: Request):
 
         if user_id and new_plan in PLAN_WEIGHTS:
             try:
+                # 昇格専用のアトミックRPCを呼び出す
                 result = supabase.rpc('update_plan_atomic', {
                     'target_user_id': user_id,
                     'new_plan': new_plan,
                     'new_weight': PLAN_WEIGHTS[new_plan]
                 }).execute()
-                
+
                 if result.data:
                     plan_result = result.data
                     action = plan_result.get('action', 'unknown')
                     logger.info(f"Plan update result: user={user_id}, action={action}, plan={new_plan}")
                 else:
                     logger.error("No data returned from RPC")
-                    
+
             except Exception as e:
                 logger.error(f"❌ RPC failed for user {user_id}: {e}")
+
+    # ② サブスクリプション解約時の処理（Freeへの強制ダウングレード）
+    elif event['type'] == 'customer.subscription.deleted':
+        subscription = event['data']['object']
+
+        # 決済時に埋め込んだ metadata からユーザーIDを取得
+        metadata = getattr(subscription, 'metadata', None)
+        user_id = getattr(metadata, 'user_id', None) if metadata else None
+
+        if user_id:
+            try:
+                # ★ 変更点：ダウングレード専用のRPCを呼び出す ★
+                result = supabase.rpc('downgrade_to_free', {
+                    'target_user_id': user_id
+                }).execute()
+
+                logger.info(f"Subscription canceled: user={user_id} downgraded to Free.")
+            except Exception as e:
+                logger.error(f"❌ Downgrade RPC failed for user {user_id}: {e}")
+        else:
+            # user_id が取得できないと黙ってダウングレードが失敗するため、必ずログに残す
+            logger.error(
+                f"Downgrade skipped: user_id not found. "
+                f"subscription={getattr(subscription, 'id', None)}, "
+                f"customer={getattr(subscription, 'customer', None)}"
+            )
 
     return {"status": "success"}
