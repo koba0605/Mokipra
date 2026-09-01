@@ -1,0 +1,65 @@
+name: Supabase Backup
+
+# 週1回 pg_dump を取得し、AES256 で暗号化して Artifact に保存する。
+# 公開リポジトリの Artifact は誰でもダウンロードできるため、暗号化は必須。
+on:
+  schedule:
+    # 毎週 日曜 04:00 UTC（= 13:00 JST）
+    - cron: "0 4 * * 0"
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install PostgreSQL client
+        run: |
+          set -euo pipefail
+          # Ubuntu 標準の pg_dump はバージョンが古く、
+          # サーバより古いとダンプが拒否されるため PGDG から導入する
+          sudo apt-get update
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-17
+          pg_dump --version
+
+      - name: Dump database
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          STAMP=$(date -u +"%Y%m%d")
+          echo "STAMP=$STAMP" >> "$GITHUB_ENV"
+
+          pg_dump "$DB_URL" \
+            --no-owner \
+            --no-privileges \
+            --clean \
+            --if-exists \
+            --schema=public \
+            -f "mokipra_${STAMP}.sql"
+
+          ls -lh "mokipra_${STAMP}.sql"
+
+      - name: Encrypt dump
+        env:
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          gpg --batch --yes \
+            --passphrase "$PASSPHRASE" \
+            --symmetric --cipher-algo AES256 \
+            -o "mokipra_${STAMP}.sql.gpg" \
+            "mokipra_${STAMP}.sql"
+
+          # 平文は必ず削除してから Artifact 化する
+          rm -f "mokipra_${STAMP}.sql"
+          ls -lh "mokipra_${STAMP}.sql.gpg"
+
+      - name: Upload encrypted backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: mokipra-backup-${{ env.STAMP }}
+          path: "*.sql.gpg"
+          retention-days: 90
+          if-no-files-found: error
