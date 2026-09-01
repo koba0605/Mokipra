@@ -29,9 +29,17 @@ DESCRIPTION = (
     "アルバイト・新卒就活・エンジニア転職・大学院入試の面接練習に対応。"
     "音声入力で本番に近い形式の練習ができます。"
 )
-# static/ 配下のファイル名は実環境に合わせて変更すること
-FAVICON_PATH = "/app/static/favicon.png"
-OG_IMAGE_PATH = "/app/static/og.png"
+# config.toml の enableStaticServing = true により
+# ./static/ 配下は /app/static/<filename> で配信される
+ICON_LINKS = """<link rel="icon" type="image/png" sizes="48x48" href="/app/static/favicon-48.png" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/app/static/favicon-96.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/app/static/favicon-192.png" />
+    <link rel="icon" type="image/png" href="/app/static/favicon.png" />
+    <link rel="apple-touch-icon" href="/app/static/apple-touch-icon.png" />"""
+
+# OG 画像(1200x630)を作成したら、下を有効な URL に変更して
+# META_BLOCK 内の og:image / twitter:image のコメントアウトを外す
+OG_IMAGE_PATH = None
 
 # JS を実行しないクローラ向けのフォールバック本文
 NOSCRIPT_TEXT = (
@@ -48,21 +56,18 @@ META_BLOCK = f"""{BEGIN}
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="{SITE_URL}/" />
 
-    <link rel="icon" type="image/png" href="{FAVICON_PATH}" />
-    <link rel="apple-touch-icon" href="{FAVICON_PATH}" />
+    {ICON_LINKS}
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Mokipra" />
     <meta property="og:title" content="{TITLE}" />
     <meta property="og:description" content="{DESCRIPTION}" />
     <meta property="og:url" content="{SITE_URL}/" />
-    <meta property="og:image" content="{SITE_URL}{OG_IMAGE_PATH}" />
     <meta property="og:locale" content="ja_JP" />
 
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="{TITLE}" />
     <meta name="twitter:description" content="{DESCRIPTION}" />
-    <meta name="twitter:image" content="{SITE_URL}{OG_IMAGE_PATH}" />
     {END}"""
 
 NOSCRIPT_BLOCK = f"""{BEGIN}
@@ -97,6 +102,11 @@ def main() -> int:
         return 1
 
     html = html.replace("</head>", f"    {META_BLOCK}\n  </head>", 1)
+
+    # JS を実行しないクローラ向けに lang と title を静的に修正する。
+    # set_page_config はクライアント側でしか適用されないため。
+    html = html.replace('<html lang="en">', '<html lang="ja">', 1)
+    html = html.replace("<title>Streamlit</title>", f"<title>{TITLE}</title>", 1)
 
     # <body> 直後に noscript フォールバックを差し込む
     body_idx = html.find("<body")
