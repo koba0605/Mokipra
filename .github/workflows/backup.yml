@@ -57,7 +57,7 @@ jobs:
           ls -lh "mokipra_${STAMP}.sql.gpg"
 
       - name: Upload encrypted backup
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: mokipra-backup-${{ env.STAMP }}
           path: "*.sql.gpg"
