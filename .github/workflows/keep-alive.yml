@@ -1,0 +1,34 @@
+name: Supabase Keep Alive
+
+# Supabase の無料プランは7日間 DB 活動がないとプロジェクトが一時停止される。
+# 週2回 INSERT を実行して停止を防ぐ。
+on:
+  schedule:
+    # 毎週 日曜・水曜 の 03:00 UTC（= 12:00 JST）
+    # cron は必ず UTC 基準であることに注意
+    - cron: "0 3 * * 0,3"
+  workflow_dispatch: # 手動実行も可能にする
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping database
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+
+          # INSERT で確実に「書き込み活動」を発生させる
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c \
+            "insert into public.keep_alive default values;"
+
+          # 30日より古い行は削除してテーブルが太らないようにする
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c \
+            "delete from public.keep_alive where pinged_at < now() - interval '30 days';"
+
+          # 直近の記録を確認（機密情報は含まれない）
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c \
+            "select count(*) as rows, max(pinged_at) as last_ping from public.keep_alive;"
+
+          echo "keep-alive completed"
