@@ -37,6 +37,7 @@ jobs:
             --clean \
             --if-exists \
             --schema=public \
+            --schema=auth \
             -f "mokipra_${STAMP}.sql"
 
           ls -lh "mokipra_${STAMP}.sql"
