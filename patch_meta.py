@@ -53,7 +53,7 @@ END = "<!-- END MOKIPRA SEO -->"
 
 META_BLOCK = f"""{BEGIN}
     <meta name="description" content="{DESCRIPTION}" />
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content="noindex, follow" />
     <link rel="canonical" href="{SITE_URL}/" />
 
     {ICON_LINKS}
