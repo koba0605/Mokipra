@@ -1160,8 +1160,13 @@ if st.session_state.page_state == "setup":
         # グループディスカッション練習への導線（Pro / Max 限定）
         # ------------------------------------------------------------------
         st.markdown("""
-        <div class="glass-card">
-            <p class="mkp-eyebrow">GROUP DISCUSSION</p>
+        <div class="glass-card" style="position:relative; border:2px solid var(--ai);
+                    box-shadow:0 6px 22px rgba(34,56,92,.14);">
+            <span style="position:absolute; top:-11px; left:22px; background:var(--seal);
+                         color:#fff; font-size:.68rem; font-weight:700; letter-spacing:.12em;
+                         padding:3px 13px; border-radius:3px;
+                         box-shadow:0 2px 6px rgba(184,68,58,.28);">N E W</span>
+            <p class="mkp-eyebrow" style="margin-top:6px;">GROUP DISCUSSION</p>
             <h3 style="margin:0 0 12px;">AI参加者4名と、本番形式のGD練習</h3>
             <p style="margin-bottom:16px;">好きなタイミングで発言し、司会・書記・タイムキーパーの役割も選べます。<br>終了後は5軸10段階の評価と、職務ごとの達成判定が返ります。</p>
             <div style="margin-top:14px;">
@@ -1177,7 +1182,9 @@ if st.session_state.page_state == "setup":
         else:
             if current_user_plan == "Free":
                 st.success("現在、Freeプランでもグループディスカッションを試せます（お試し公開中）。")
-            if st.button("グループディスカッションを始める", key="go_gd", use_container_width=True):
+            if st.button("グループディスカッションを始める", key="go_gd",
+                         type="primary", use_container_width=True,
+                         icon=":material/groups:"):
                 st.session_state.page_state = "gd"
                 st.rerun()
 
@@ -2020,4 +2027,3 @@ elif st.session_state.page_state == "result":
                 
         st.session_state.page_state = "setup"
         st.rerun()
-        ##権利昇格込みだから注意
