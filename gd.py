@@ -690,15 +690,62 @@ def generate_theme(fmt: str, kind: str, industry: str = "指定なし"):
         return ""
 
 
+# 無音や雑音を渡したときに Whisper が出力しがちな定型句。
+# 学習データ（字幕付き動画）に頻出する言い回しが、音声が無いときに現れる。
+# 発言としてそのまま採用すると評価が歪むため、短い出力がこれらに一致したら捨てる。
+_HALLUCINATIONS = (
+    "ご視聴ありがとうございました", "ご視聴ありがとうございます",
+    "本日はお越しいただきありがとうございます",
+    "最後までご視聴いただきありがとうございました",
+    "チャンネル登録をお願いします", "チャンネル登録よろしくお願いします",
+    "お疲れ様でした", "おつかれさまでした",
+    "ありがとうございました", "ありがとうございます",
+    "字幕は自動生成されています", "音声はありません",
+    "終わり", "以上です",
+)
+
+# これより小さい録音は「実質無音」とみなす（16kHz WAV でおよそ0.5秒未満）
+_MIN_AUDIO_BYTES = 16000
+
+
+def _looks_like_hallucination(text: str) -> bool:
+    """無音時に出る定型句かどうか。"""
+    t = re.sub(r"[。、,.!?！？\s]", "", text)
+    if len(t) > 30:            # 長い発言は本物とみなす
+        return False
+    for h in _HALLUCINATIONS:
+        if t == re.sub(r"[。、,.!?！？\s]", "", h):
+            return True
+    return False
+
+
 def transcribe(audio_file):
-    """録音した音声を文字起こしする。失敗したら None。"""
+    """録音した音声を文字起こしする。
+
+    無音のまま送ると Whisper が学習データ由来の定型句を返すことがあるため、
+    録音サイズと出力内容の両方で弾く。失敗・無音のときは None を返す。
+    """
     try:
+        size = getattr(audio_file, "size", None)
+        if size is not None and size < _MIN_AUDIO_BYTES:
+            st.warning("音声が短すぎます。マイクに向かって話してから停止してください。")
+            return None
+
         res = _client.audio.transcriptions.create(
             model="whisper-1",
             file=("speech.wav", audio_file, "audio/wav"),
             language="ja",
+            temperature=0,
         )
-        return (res.text or "").strip()
+        text = (res.text or "").strip()
+
+        if not text:
+            st.warning("音声を認識できませんでした。もう一度録音してください。")
+            return None
+        if _looks_like_hallucination(text):
+            st.warning("発話を検出できませんでした。もう一度録音してください。")
+            return None
+        return text
     except Exception as e:
         st.error(f"文字起こしに失敗しました: {e}")
         return None
@@ -1236,6 +1283,15 @@ _CSS = """
   color: var(--ink-soft) !important; font-weight: 600; }
 .gd-tag b { color: var(--ai) !important; font-weight: 700; }
 
+.gd-rec { background: var(--ai-wash); border: 1px solid #C9D4E4; border-radius: 10px;
+  padding: 14px 18px 12px; margin: 6px 0 10px; }
+.gd-rec .hd { font-size: .88rem; font-weight: 700; color: var(--ai) !important;
+  margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+.gd-rec .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--seal);
+  display: inline-block; flex: 0 0 auto; }
+.gd-rec ol { margin: 0; padding-left: 1.25rem; }
+.gd-rec li { font-size: .84rem; color: var(--ink-soft) !important; line-height: 1.9; }
+.gd-rec li b { color: var(--ink) !important; }
 .gd-stat { text-align: center; padding: 12px 6px; }.gd-stat .v { font-family: var(--serif); font-size: 1.9rem; font-weight: 800;
   color: var(--ai) !important; line-height: 1; }
 .gd-stat .l { font-size: .7rem; letter-spacing: .1em; color: var(--muted) !important;
@@ -1546,9 +1602,23 @@ def render(*, client, model="gpt-4o-mini", plan="Free",
                             key=f"c_input_{turns}")
 
             if method == "音声で話す":
+                # st.audio_input はマイクのアイコンだけが並ぶ見た目で、
+                # どこを押せば録音が始まるのか分かりにくい。手順を明示する。
+                st.markdown(
+                    '<div class="gd-rec">'
+                    '<p class="hd"><span class="dot"></span>音声で発言する</p>'
+                    '<ol>'
+                    '<li>下の<b>マイクのボタン</b>を押すと録音が始まります</li>'
+                    '<li>話し終わったら<b>停止ボタン</b>を押します</li>'
+                    '<li>自動で文字に起こされ、下の欄に入ります</li>'
+                    '</ol></div>',
+                    unsafe_allow_html=True,
+                )
                 try:
-                    audio = st.audio_input("録音", key=f"gd_audio_{turns}",
-                                           label_visibility="collapsed")
+                    audio = st.audio_input(
+                        "マイクのボタンを押して話してください",
+                        key=f"gd_audio_{turns}",
+                    )
                 except AttributeError:
                     audio = None
                     st.warning("このStreamlitのバージョンでは音声入力が使えません。"
@@ -1561,8 +1631,9 @@ def render(*, client, model="gpt-4o-mini", plan="Free",
                         st.session_state[in_key] = sanitize_input(spoken, MAX_SPEECH_LEN)
                         st.session_state.gd_audio_done = turns
                         st.rerun()
-                st.caption("録音を止めると自動で文字に起こされます。"
-                           "内容を確認・修正してから「発言する」を押してください。")
+
+                st.caption("文字起こしの結果は下の欄で修正できます。"
+                           "内容を確認してから「発言する」を押してください。")
 
             text = st.text_area(
                 "発言内容",
