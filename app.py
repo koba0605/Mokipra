@@ -320,6 +320,11 @@ st.html("""
     /* ---- チャット ---- */
     [data-testid="stChatMessage"] { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; animation: mkpRise .45s cubic-bezier(.22,.9,.3,1) both; }
 
+    /* ---- プラン限定バッジ ---- */
+    .mkp-plan-tag { display: inline-block; background: var(--seal); color: #fff !important;
+        font-size: .68rem; font-weight: 700; letter-spacing: .1em; padding: 3px 12px;
+        border-radius: 999px; box-shadow: 0 2px 6px rgba(184,68,58,.24); }
+
     /* ---- 広告 ---- */
     .mkp-ad-wrap { max-width: 900px; margin: 0 auto; text-align: center; }
     .mkp-ad-label { color: var(--muted) !important; font-size: .66rem !important; font-weight: 700 !important; letter-spacing: .22em; text-indent: .22em; margin: 0 0 12px !important; }
@@ -346,6 +351,48 @@ st.html("""
 #    絵文字は環境ごとに描画が変わり配色も制御できないため使わない。
 #    currentColor を使い、親要素の色指定でトーンを合わせる。
 # ==============================================================================
+# ====================================================
+# 📢 スポンサーリンク（A8.net アフィリエイト広告）
+#    景品表示法（ステルスマーケティング規制）に基づき、
+#    広告であることが明確に分かる表示を必ず添える。
+#    タグは A8 から発行されたものを改変せず使用する
+#    （target="_blank" のみ、離脱防止のため付与）。
+#    複数画面から使うため関数にまとめてある。
+# ====================================================
+def render_sponsor_ads():
+    _ad_a8_1 = (
+        '<a href="https://px.a8.net/svt/ejp?a8mat=4BA41B+EGCVHU+3Y9Y+ZRALD" rel="nofollow" target="_blank">'
+        '<img border="0" width="234" height="60" alt="" '
+        'src="https://www27.a8.net/svt/bgt?aid=260812271874&wid=001&eno=01&mid=s00000018439006006000&mc=1"></a>'
+        '<img border="0" width="1" height="1" '
+        'src="https://www17.a8.net/0.gif?a8mat=4BA41B+EGCVHU+3Y9Y+ZRALD" alt="">'
+    )
+    _ad_a8_2 = (
+        '<a href="https://px.a8.net/svt/ejp?a8mat=4BA41A+ABII9E+408S+601S1" rel="nofollow" target="_blank">'
+        '<img border="0" width="120" height="60" alt="" '
+        'src="https://www29.a8.net/svt/bgt?aid=260812270624&wid=001&eno=01&mid=s00000018694001008000&mc=1"></a>'
+        '<img border="0" width="1" height="1" '
+        'src="https://www11.a8.net/0.gif?a8mat=4BA41A+ABII9E+408S+601S1" alt="">'
+    )
+    _ad_a8_3 = (
+        '<a href="https://px.a8.net/svt/ejp?a8mat=4BACLE+8IM9BM+10SQ+BXQOH" rel="nofollow" target="_blank">'
+        '<img border="0" width="320" height="50" alt="" '
+        'src="https://www29.a8.net/svt/bgt?aid=260823362515&wid=001&eno=01&mid=s00000004769002005000&mc=1"></a>'
+        '<img border="0" width="1" height="1" '
+        'src="https://www13.a8.net/0.gif?a8mat=4BACLE+8IM9BM+10SQ+BXQOH" alt="">'
+    )
+    _ad_html = (
+        '<div class="mkp-ad-wrap">'
+        '<p class="mkp-ad-label">スポンサーリンク</p>'
+        '<div class="mkp-ad-row">'
+        '<span class="mkp-ad-item">' + _ad_a8_3 + '</span>'
+        '<span class="mkp-ad-item">' + _ad_a8_1 + '</span>'
+        '<span class="mkp-ad-item">' + _ad_a8_2 + '</span>'
+        '</div></div>'
+    )
+    st.markdown(_ad_html, unsafe_allow_html=True)
+
+
 def line_icon(name, size=34, stroke=1.5):
     paths = {
         "mic": (
@@ -601,29 +648,40 @@ if not st.session_state.user:
     """, unsafe_allow_html=True)
 
     feat_col1, feat_col2, feat_col3, feat_col4 = st.columns(4)
+    #   4要素目は「対象プラン」。有料限定の機能はバッジで明示する。
     _features = [
         ("mic", "本番さながらの音声面接",
-         "AIが面接官として音声で質問します。テキスト入力だけでなく、実際に声に出して答える練習ができます。"),
+         "AIが面接官として音声で質問します。テキスト入力だけでなく、実際に声に出して答える練習ができます。",
+         ""),
         ("score", "AIによる自動採点",
-         "面接終了後、回答内容を分析して総合評価を提示します。強み・改善点・次に取るべき行動が具体的にわかります。"),
+         "面接終了後、回答内容を分析して総合評価を提示します。強み・改善点・次に取るべき行動が具体的にわかります。",
+         ""),
         ("group", "グループディスカッション練習",
          "AI参加者4名と本番形式で議論します。司会・書記・タイムキーパーの役割も選べ、"
-         "終了後は5軸10段階で評価されます（Pro・Maxプラン）。"),
+         "終了後は5軸10段階で評価されます。",
+         "Pro / Max 限定"),
         ("doc", "書類を読み込んだ深い面接",
-         "エントリーシートや研究計画書のPDFを読み込ませると、その内容に踏み込んだ質問が生成されます（Maxプラン）。"),
+         "エントリーシートや研究計画書のPDFを読み込ませると、その内容に踏み込んだ質問が生成されます。",
+         "Max 限定"),
     ]
-    for _col, (_icon, _title, _desc) in zip(
+    for _col, (_icon, _title, _desc, _plan_tag) in zip(
             [feat_col1, feat_col2, feat_col3, feat_col4], _features):
         _icon_svg = line_icon(_icon)
+        _badge = (
+            f'<div style="text-align:center;margin:0 0 10px;">'
+            f'<span class="mkp-plan-tag">{_plan_tag}</span></div>'
+        ) if _plan_tag else ""
         with _col:
             st.markdown(f"""
             <div class="mkp-card" style="background: rgba(255,255,255,0.85); padding: 20px; border-radius: 14px;
-                        border: 1px solid #cbd5e1; height: 100%; min-height: 190px;">
+                        border: 1px solid #cbd5e1; height: 100%; min-height: 210px;">
                 <div class="mkp-feat-icon">{_icon_svg}</div>
-                <h5 style="color: #0f172a; text-align: center; margin: 8px 0 10px 0;">{_title}</h5>
+                <h5 style="color: #0f172a; text-align: center; margin: 8px 0 8px 0;">{_title}</h5>
+                {_badge}
                 <p style="color: #475569; font-size: 0.88rem; margin: 0; line-height: 1.7;">{_desc}</p>
             </div>
             """, unsafe_allow_html=True)
+
 
     st.markdown("<div style='height: 32px;'></div>", unsafe_allow_html=True)
 
@@ -789,44 +847,7 @@ if not st.session_state.user:
 
     st.markdown("<div style='height: 36px;'></div>", unsafe_allow_html=True)
 
-    # ====================================================
-    # 📢 スポンサーリンク（A8.net アフィリエイト広告）
-    #    景品表示法（ステルスマーケティング規制）に基づき、
-    #    広告であることが明確に分かる表示を必ず添える。
-    #    タグは A8 から発行されたものを改変せず使用する
-    #    （target="_blank" のみ、離脱防止のため付与）。
-    # ====================================================
-    _ad_a8_1 = (
-        '<a href="https://px.a8.net/svt/ejp?a8mat=4BA41B+EGCVHU+3Y9Y+ZRALD" rel="nofollow" target="_blank">'
-        '<img border="0" width="234" height="60" alt="" '
-        'src="https://www27.a8.net/svt/bgt?aid=260812271874&wid=001&eno=01&mid=s00000018439006006000&mc=1"></a>'
-        '<img border="0" width="1" height="1" '
-        'src="https://www17.a8.net/0.gif?a8mat=4BA41B+EGCVHU+3Y9Y+ZRALD" alt="">'
-    )
-    _ad_a8_2 = (
-        '<a href="https://px.a8.net/svt/ejp?a8mat=4BA41A+ABII9E+408S+601S1" rel="nofollow" target="_blank">'
-        '<img border="0" width="120" height="60" alt="" '
-        'src="https://www29.a8.net/svt/bgt?aid=260812270624&wid=001&eno=01&mid=s00000018694001008000&mc=1"></a>'
-        '<img border="0" width="1" height="1" '
-        'src="https://www11.a8.net/0.gif?a8mat=4BA41A+ABII9E+408S+601S1" alt="">'
-    )
-    _ad_a8_3 = (
-        '<a href="https://px.a8.net/svt/ejp?a8mat=4BACLE+8IM9BM+10SQ+BXQOH" rel="nofollow" target="_blank">'
-        '<img border="0" width="320" height="50" alt="" '
-        'src="https://www29.a8.net/svt/bgt?aid=260823362515&wid=001&eno=01&mid=s00000004769002005000&mc=1"></a>'
-        '<img border="0" width="1" height="1" '
-        'src="https://www13.a8.net/0.gif?a8mat=4BACLE+8IM9BM+10SQ+BXQOH" alt="">'
-    )
-    _ad_html = (
-        '<div class="mkp-ad-wrap">'
-        '<p class="mkp-ad-label">スポンサーリンク</p>'
-        '<div class="mkp-ad-row">'
-        '<span class="mkp-ad-item">' + _ad_a8_3 + '</span>'
-        '<span class="mkp-ad-item">' + _ad_a8_1 + '</span>'
-        '<span class="mkp-ad-item">' + _ad_a8_2 + '</span>'
-        '</div></div>'
-    )
-    st.markdown(_ad_html, unsafe_allow_html=True)
+    render_sponsor_ads()
 
     st.markdown("<div style='height: 34px;'></div>", unsafe_allow_html=True)
 
@@ -1425,6 +1446,8 @@ elif st.session_state.page_state == "gd":
             on_exit=_gd_exit,
             on_session_start=(None if _gd_is_trial else _gd_started),
             on_finish=_gd_finished,
+            # 広告は無料利用者にのみ表示する（有料プランでは出さない）
+            render_ads=(render_sponsor_ads if current_user_plan == "Free" else None),
         )
 
 # ====================================================
