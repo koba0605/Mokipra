@@ -1283,6 +1283,20 @@ _CSS = """
   color: var(--ink-soft) !important; font-weight: 600; }
 .gd-tag b { color: var(--ai) !important; font-weight: 700; }
 
+/* Streamlit標準の録音ウィジェットを、押せる場所と分かるように強調する */
+[data-testid="stAudioInput"] {
+  border: 2px dashed var(--sky-line) !important;
+  border-radius: 10px !important;
+  background: #FFFFFF !important;
+  padding: 8px 10px !important;
+}
+[data-testid="stAudioInput"] button {
+  background: var(--seal) !important;
+  border-color: var(--seal) !important;
+  color: #FFFFFF !important;
+}
+[data-testid="stAudioInput"] button svg { fill: #FFFFFF !important; }
+
 .gd-rec { background: var(--ai-wash); border: 1px solid #C9D4E4; border-radius: 10px;
   padding: 14px 18px 12px; margin: 6px 0 10px; }
 .gd-rec .hd { font-size: .88rem; font-weight: 700; color: var(--ai) !important;
@@ -1302,6 +1316,9 @@ _CSS = """
 
 def _reset_session():
     """GDのセッション状態を消す。他機能のキーには触れない。"""
+    for k in [k for k in list(st.session_state.keys())
+              if str(k).startswith("gd_rec_open_")]:
+        del st.session_state[k]
     for k in ["gd_stage", "gd_theme", "gd_format", "gd_role", "gd_log",
               "gd_voluntary", "gd_prompted", "gd_silent", "gd_result",
               "gd_coach", "gd_hints_used", "gd_hint",
@@ -1602,38 +1619,54 @@ def render(*, client, model="gpt-4o-mini", plan="Free",
                             key=f"c_input_{turns}")
 
             if method == "音声で話す":
-                # st.audio_input はマイクのアイコンだけが並ぶ見た目で、
-                # どこを押せば録音が始まるのか分かりにくい。手順を明示する。
-                st.markdown(
-                    '<div class="gd-rec">'
-                    '<p class="hd"><span class="dot"></span>音声で発言する</p>'
-                    '<ol>'
-                    '<li>下の<b>マイクのボタン</b>を押すと録音が始まります</li>'
-                    '<li>話し終わったら<b>停止ボタン</b>を押します</li>'
-                    '<li>自動で文字に起こされ、下の欄に入ります</li>'
-                    '</ol></div>',
-                    unsafe_allow_html=True,
-                )
-                try:
-                    audio = st.audio_input(
-                        "マイクのボタンを押して話してください",
-                        key=f"gd_audio_{turns}",
-                    )
-                except AttributeError:
-                    audio = None
-                    st.warning("このStreamlitのバージョンでは音声入力が使えません。"
-                               "`pip install -U streamlit` で更新してください。")
+                rec_key = f"gd_rec_open_{turns}"
 
-                if audio is not None and st.session_state.get("gd_audio_done") != turns:
-                    with st.spinner("文字起こしをしています..."):
-                        spoken = transcribe(audio)
-                    if spoken:
-                        st.session_state[in_key] = sanitize_input(spoken, MAX_SPEECH_LEN)
-                        st.session_state.gd_audio_done = turns
+                if not st.session_state.get(rec_key):
+                    # st.audio_input はマイクのアイコンだけが置かれる見た目で、
+                    # 何を押せば始まるのか伝わらない。明示的な開始ボタンを前に置く。
+                    if st.button("音声入力を開始する", key=f"gd_rec_start_{turns}",
+                                 type="primary", use_container_width=True,
+                                 icon=":material/mic:"):
+                        st.session_state[rec_key] = True
+                        st.rerun()
+                    st.caption("押すと録音パネルが開きます。")
+                else:
+                    st.markdown(
+                        '<div class="gd-rec">'
+                        '<p class="hd"><span class="dot"></span>録音の使い方</p>'
+                        '<ol>'
+                        '<li>下の<b>赤いマイク</b>を押すと録音が始まります</li>'
+                        '<li>話し終わったら<b>停止</b>を押します</li>'
+                        '<li>自動で文字に起こされ、下の入力欄に入ります</li>'
+                        '</ol></div>',
+                        unsafe_allow_html=True,
+                    )
+                    try:
+                        audio = st.audio_input(
+                            "ここを押して話す",
+                            key=f"gd_audio_{turns}",
+                        )
+                    except AttributeError:
+                        audio = None
+                        st.warning("このStreamlitのバージョンでは音声入力が使えません。"
+                                   "`pip install -U streamlit` で更新してください。")
+
+                    if audio is not None and st.session_state.get("gd_audio_done") != turns:
+                        with st.spinner("文字起こしをしています..."):
+                            spoken = transcribe(audio)
+                        if spoken:
+                            st.session_state[in_key] = sanitize_input(
+                                spoken, MAX_SPEECH_LEN)
+                            st.session_state.gd_audio_done = turns
+                            st.rerun()
+
+                    if st.button("音声入力を閉じる", key=f"gd_rec_close_{turns}",
+                                 use_container_width=True):
+                        st.session_state[rec_key] = False
                         st.rerun()
 
-                st.caption("文字起こしの結果は下の欄で修正できます。"
-                           "内容を確認してから「発言する」を押してください。")
+                    st.caption("文字起こしの結果は下の欄で修正できます。"
+                               "内容を確認してから「発言する」を押してください。")
 
             text = st.text_area(
                 "発言内容",
