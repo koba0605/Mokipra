@@ -5,6 +5,8 @@ from openai import OpenAI
 import openai
 from supabase import create_client, Client
 from streamlit_option_menu import option_menu
+
+import gd  # グループディスカッション機能（別モジュール）
 from streamlit_lottie import st_lottie
 import requests
 import io
@@ -388,6 +390,13 @@ def line_icon(name, size=34, stroke=1.5):
             '<path d="M11 17v8.5c0 2.6 4 4.8 9 4.8s9-2.2 9-4.8V17"/>'
             '<path d="M34.5 14v8"/>'
         ),
+        "group": (
+            '<circle cx="12" cy="14" r="4.2"/>'
+            '<circle cx="28" cy="14" r="4.2"/>'
+            '<path d="M4.5 30v-1.5a7.5 7.5 0 0 1 15 0V30"/>'
+            '<path d="M20.5 30v-1.5a7.5 7.5 0 0 1 15 0V30"/>'
+            '<path d="M14.5 20.5h11"/>'
+        ),
         "doc": (
             '<path d="M11.5 5h11l7 7v22.5a1 1 0 0 1-1 1H11.5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/>'
             '<path d="M22.5 5v7h7"/>'
@@ -591,16 +600,20 @@ if not st.session_state.user:
     </div>
     """, unsafe_allow_html=True)
 
-    feat_col1, feat_col2, feat_col3 = st.columns(3)
+    feat_col1, feat_col2, feat_col3, feat_col4 = st.columns(4)
     _features = [
         ("mic", "本番さながらの音声面接",
          "AIが面接官として音声で質問します。テキスト入力だけでなく、実際に声に出して答える練習ができます。"),
         ("score", "AIによる自動採点",
          "面接終了後、回答内容を分析して総合評価を提示します。強み・改善点・次に取るべき行動が具体的にわかります。"),
+        ("group", "グループディスカッション練習",
+         "AI参加者4名と本番形式で議論します。司会・書記・タイムキーパーの役割も選べ、"
+         "終了後は5軸10段階で評価されます（Pro・Maxプラン）。"),
         ("doc", "書類を読み込んだ深い面接",
          "エントリーシートや研究計画書のPDFを読み込ませると、その内容に踏み込んだ質問が生成されます（Maxプラン）。"),
     ]
-    for _col, (_icon, _title, _desc) in zip([feat_col1, feat_col2, feat_col3], _features):
+    for _col, (_icon, _title, _desc) in zip(
+            [feat_col1, feat_col2, feat_col3, feat_col4], _features):
         _icon_svg = line_icon(_icon)
         with _col:
             st.markdown(f"""
@@ -666,7 +679,7 @@ if not st.session_state.user:
     _plans = [
         {
             "name": "Free", "price": "0", "unit": "円", "limit": "1日 1回",
-            "items": ["AI音声面接", "自動採点・アドバイス"],
+            "items": ["AI音声面接（1回4ターン）", "自動採点・アドバイス"],
             "bg": "#FFFFFF",
             "border": "#E0E0D8", "accent": "#8B9096",
             "shadow": "0 1px 2px rgba(27,30,33,.04)",
@@ -674,7 +687,8 @@ if not st.session_state.user:
         },
         {
             "name": "Pro", "price": "480", "unit": "円 / 月", "limit": "1日 10回",
-            "items": ["AI音声面接", "自動採点・アドバイス", "面接履歴の保存"],
+            "items": ["AI音声面接（1回10ターン）", "自動採点・アドバイス",
+                      "グループディスカッション練習", "面接履歴の保存"],
             "bg": "#FFFFFF",
             "border": "#22385C", "accent": "#22385C",
             "shadow": "0 4px 18px rgba(34,56,92,.10)",
@@ -682,7 +696,8 @@ if not st.session_state.user:
         },
         {
             "name": "Max", "price": "980", "unit": "円 / 月", "limit": "1日 10回",
-            "items": ["Proのすべての機能", "PDF読み込み対応", "書類に基づく深掘り質問"],
+            "items": ["Proのすべての機能", "グループディスカッション練習",
+                      "PDF読み込み対応", "書類に基づく深掘り質問"],
             "bg": "#FFFFFF",
             "border": "#B8443A", "accent": "#B8443A",
             "shadow": "0 4px 18px rgba(184,68,58,.10)",
@@ -929,7 +944,6 @@ def get_interview_history(uid):
 def create_checkout_session(user_id, plan_type):
     api_key = get_secret("STRIPE_SECRET_KEY", "")
     stripe.api_key = api_key
-    subscription_data={"metadata": {"user_id": user_id}},
     
     if not stripe.api_key:
         return None, "STRIPE_SECRET_KEY が設定されていません。"
@@ -968,10 +982,59 @@ usage_data = get_user_usage(user_id)
 current_user_plan = usage_data["plan"]
 current_daily_usage = usage_data["count"]
 
+# ====================================================
+# 🧪 テスト用アカウントのプラン上書き
+#   決済を通さずに Pro / Max の動作を確認するための仕組み。
+#   メールアドレスは公開リポジトリに置かず、環境変数から読む。
+#     TEST_PRO_EMAILS = "a@example.com,b@example.com"
+#     TEST_MAX_EMAILS = "c@example.com"
+#   Render の Environment、またはローカルの .streamlit/secrets.toml に設定する。
+#   DBのplanは書き換えず、この実行中の表示・判定のみを上書きする。
+# ====================================================
+def _test_plan_override(current_plan):
+    try:
+        email = (getattr(st.session_state.user, "email", "") or "").strip().lower()
+    except Exception:
+        return current_plan, False
+    if not email:
+        return current_plan, False
+
+    def _emails(key):
+        raw = get_secret(key, "") or ""
+        return {e.strip().lower() for e in raw.split(",") if e.strip()}
+
+    if email in _emails("TEST_MAX_EMAILS"):
+        return "Max", True
+    if email in _emails("TEST_PRO_EMAILS"):
+        return "Pro", True
+    return current_plan, False
+
+
+current_user_plan, _is_test_account = _test_plan_override(current_user_plan)
+
+
+# ====================================================
+# 🧪 GDの一時開放フラグ
+#   フィードバック収集のあいだだけ、Freeプランでもグループディスカッションを
+#   試せるようにする。環境変数を消すだけで元に戻せるようにしてある。
+#     GD_OPEN_TO_FREE = "true"
+#   開放中、FreeユーザーのGDは面接練習の回数を消費しない（本来は有料機能のため、
+#   無料枠を削らずに試してもらう意図）。収集が終わったら必ず環境変数を削除すること。
+# ====================================================
+def _gd_open_to_free():
+    return str(get_secret("GD_OPEN_TO_FREE", "")).strip().lower() in ("true", "1", "yes", "on")
+
+
+GD_OPEN_TO_FREE = _gd_open_to_free()
+if _is_test_account:
+    logger.info(f"Test plan override applied: user={user_id} plan={current_user_plan}")
+    st.caption(f"🧪 テストアカウントとして {current_user_plan} プランで動作しています。")
+
 PLAN_LIMITS = {"Free": 1, "Pro": 10, "Max": 10}
 current_limit = PLAN_LIMITS[current_user_plan]
 
-TOTAL_TURNS = 10 if current_user_plan == "Max" else 4
+# 1回の面接で行う質疑応答の回数。有料プランは本番に近い長さにする。
+TOTAL_TURNS = 10 if current_user_plan in ("Pro", "Max") else 4
 LLM_MODEL = "gpt-4o" if current_user_plan == "Max" else "gpt-4o-mini"
 MAX_INPUT_CHARS = 1500 if current_user_plan == "Max" else 900
 
@@ -1093,6 +1156,31 @@ if st.session_state.page_state == "setup":
         </div>
         """, unsafe_allow_html=True)
         
+        # ------------------------------------------------------------------
+        # グループディスカッション練習への導線（Pro / Max 限定）
+        # ------------------------------------------------------------------
+        st.markdown("""
+        <div class="glass-card">
+            <p class="mkp-eyebrow">GROUP DISCUSSION</p>
+            <h3 style="margin:0 0 12px;">AI参加者4名と、本番形式のGD練習</h3>
+            <p style="margin-bottom:16px;">好きなタイミングで発言し、司会・書記・タイムキーパーの役割も選べます。<br>終了後は5軸10段階の評価と、職務ごとの達成判定が返ります。</p>
+            <div style="margin-top:14px;">
+                <span class="feature-badge">自発的な発言を計測</span>
+                <span class="feature-badge">役割ごとの職務チェック</span>
+                <span class="feature-badge">発言ごとの講評</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if current_user_plan == "Free" and not GD_OPEN_TO_FREE:
+            st.info("グループディスカッション練習は Pro / Max プラン限定の機能です。")
+        else:
+            if current_user_plan == "Free":
+                st.success("現在、Freeプランでもグループディスカッションを試せます（お試し公開中）。")
+            if st.button("グループディスカッションを始める", key="go_gd", use_container_width=True):
+                st.session_state.page_state = "gd"
+                st.rerun()
+
         if current_user_plan in ["Free", "Pro"]:
             st.markdown('<div class="glass-card" style="background: #f8fafc; border: 1px solid #cbd5e1;">', unsafe_allow_html=True)
             st.markdown("<p class='mkp-eyebrow' style='margin-top:0;'>UPGRADE</p><h4 style='margin:0 0 10px;'>プランを切り替えて機能を解放</h4>", unsafe_allow_html=True)
@@ -1289,6 +1377,48 @@ if st.session_state.page_state == "setup":
             st.session_state.start_time = time.time()
             st.session_state.page_state = "interview"
             st.rerun()
+
+# ====================================================
+# 【画面GD】グループディスカッション練習
+#   本体は gd.py 側にある。ここでは依存の受け渡しだけを行う。
+# ====================================================
+elif st.session_state.page_state == "gd":
+
+    def _gd_exit():
+        st.session_state.page_state = "setup"
+        st.rerun()
+
+    def _gd_started():
+        # 議論の開始に成功した時点で1回分を消費する
+        increment_user_usage(user_id)
+
+    def _gd_finished(score, context):
+        save_interview_history(user_id, score, context)
+
+    # 開放中の Free ユーザーは、面接練習の回数枠を消費しない
+    _gd_is_trial = (current_user_plan == "Free" and GD_OPEN_TO_FREE)
+
+    if current_user_plan == "Free" and not GD_OPEN_TO_FREE:
+        st.error("グループディスカッション練習は Pro / Max プラン限定の機能です。")
+        if st.button("戻る", key="gd_free_back"):
+            st.session_state.page_state = "setup"
+            st.rerun()
+    elif (not _gd_is_trial) and current_daily_usage >= current_limit:
+        st.error("本日の練習回数の上限に達しました。明日リセットされます。")
+        if st.button("戻る", key="gd_limit_back"):
+            st.session_state.page_state = "setup"
+            st.rerun()
+    else:
+        if _gd_is_trial:
+            st.caption("お試し公開中のため、この練習は面接回数を消費しません。")
+        gd.render(
+            client=client,
+            model=LLM_MODEL,
+            plan=current_user_plan,
+            on_exit=_gd_exit,
+            on_session_start=(None if _gd_is_trial else _gd_started),
+            on_finish=_gd_finished,
+        )
 
 # ====================================================
 # 【画面2】3カラムメイン画面（左:面接官 中央:チャット 右:カメラ/設定/広告）
@@ -1890,3 +2020,4 @@ elif st.session_state.page_state == "result":
                 
         st.session_state.page_state = "setup"
         st.rerun()
+        ##権利昇格込みだから注意
