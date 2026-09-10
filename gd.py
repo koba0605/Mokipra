@@ -1144,6 +1144,7 @@ _model = "gpt-4o-mini"    # 使用モデル。プランに応じて app.py が�
 _on_exit = None           # ホームに戻るときのコールバック
 _on_session_start = None  # 議論開始が成功したときのコールバック（回数消費）
 _on_finish = None         # 評価完了時のコールバック（履歴保存）
+_render_ads = None        # 広告を描画するコールバック。None なら表示しない
 
 _CSS = """
 <style>
@@ -1283,6 +1284,45 @@ _CSS = """
   color: var(--ink-soft) !important; font-weight: 600; }
 .gd-tag b { color: var(--ai) !important; font-weight: 700; }
 
+/* 主要ボタン。GD画面はこのCSSが後から読まれるため、app.py の定義を上書きする。
+   既定の空色だと紙色の背景に沈み、押すべき場所が伝わらない。 */
+div.stButton > button[kind="primary"],
+div.stButton > button[data-testid="stBaseButton-primary"] {
+  background: linear-gradient(180deg, #2B4670 0%, var(--ai) 100%) !important;
+  border: 1px solid #17263F !important;
+  border-radius: 8px !important;
+  padding: 16px 22px !important;
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+  letter-spacing: .14em !important;
+  box-shadow: 0 6px 18px rgba(34,56,92,.30) !important;
+  transition: transform .18s ease, box-shadow .18s ease, background .18s ease !important;
+}
+div.stButton > button[kind="primary"] *,
+div.stButton > button[data-testid="stBaseButton-primary"] * {
+  color: #FFFFFF !important;
+  font-weight: 700 !important;
+  letter-spacing: .14em !important;
+}
+div.stButton > button[kind="primary"]:hover,
+div.stButton > button[data-testid="stBaseButton-primary"]:hover {
+  background: linear-gradient(180deg, #35558A 0%, #2B4670 100%) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 12px 28px rgba(34,56,92,.36) !important;
+}
+div.stButton > button[kind="secondary"],
+div.stButton > button[data-testid="stBaseButton-secondary"] {
+  border: 1px solid var(--line) !important;
+  border-radius: 8px !important;
+  padding: 16px 18px !important;
+  font-weight: 600 !important;
+}
+div.stButton > button[kind="secondary"]:hover,
+div.stButton > button[data-testid="stBaseButton-secondary"]:hover {
+  border-color: var(--ai) !important;
+  background: var(--ai-wash) !important;
+}
+
 /* Streamlit標準の録音ウィジェットを、押せる場所と分かるように強調する */
 [data-testid="stAudioInput"] {
   border: 2px dashed var(--sky-line) !important;
@@ -1314,6 +1354,14 @@ _CSS = """
 """
 
 
+def _show_ads():
+    """広告を表示する。議論の最中には出さず、区切りの画面だけに置く。"""
+    if _render_ads:
+        st.markdown('<div class="gd-secline" style="margin:30px 0 18px;"></div>',
+                    unsafe_allow_html=True)
+        _render_ads()
+
+
 def _reset_session():
     """GDのセッション状態を消す。他機能のキーには触れない。"""
     for k in [k for k in list(st.session_state.keys())
@@ -1332,7 +1380,8 @@ def _reset_session():
 # エントリポイント
 # ==============================================================================
 def render(*, client, model="gpt-4o-mini", plan="Free",
-           on_exit=None, on_session_start=None, on_finish=None):
+           on_exit=None, on_session_start=None, on_finish=None,
+           render_ads=None):
     """グループディスカッション機能を描画する。
 
     client           : OpenAI クライアント（app.py で生成済みのものを渡す）
@@ -1341,13 +1390,15 @@ def render(*, client, model="gpt-4o-mini", plan="Free",
     on_exit          : 「ホームに戻る」で呼ばれる。app.py が page_state を戻す
     on_session_start : 議論の開始に成功した直後に呼ばれる。回数の消費に使う
     on_finish        : 評価が完了したときに (score, context) で呼ばれる。履歴保存に使う
+    render_ads       : 広告を描画する関数。無料利用者にのみ渡す想定。None なら非表示
     """
-    global _client, _model, _on_exit, _on_session_start, _on_finish
+    global _client, _model, _on_exit, _on_session_start, _on_finish, _render_ads
     _client = client
     _model = model
     _on_exit = on_exit
     _on_session_start = on_session_start
     _on_finish = on_finish
+    _render_ads = render_ads
 
     st.markdown(_CSS, unsafe_allow_html=True)
     init_state()
@@ -1476,6 +1527,8 @@ def render(*, client, model="gpt-4o-mini", plan="Free",
                     f'margin:0 0 14px 40px;line-height:1.8;">{p["trait"]}</p>',
                     unsafe_allow_html=True,
                 )
+
+        _show_ads()
 
         if st.button("議論を開始する", type="primary", use_container_width=True):
             if not theme.strip():
@@ -1868,6 +1921,8 @@ def render(*, client, model="gpt-4o-mini", plan="Free",
             for m in st.session_state.gd_log:
                 label = "あなた" if m["kind"] == "me" else m["name"]
                 st.markdown(f"**{label}**: {m['text']}")
+
+        _show_ads()
 
         c_again, c_home = st.columns(2)
         with c_again:
