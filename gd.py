@@ -20,6 +20,8 @@ import random
 
 import streamlit as st
 
+import stt  # 音声認識の共通処理
+
 # ==============================================================================
 # 設定
 # ==============================================================================
@@ -690,65 +692,29 @@ def generate_theme(fmt: str, kind: str, industry: str = "指定なし"):
         return ""
 
 
-# 無音や雑音を渡したときに Whisper が出力しがちな定型句。
-# 学習データ（字幕付き動画）に頻出する言い回しが、音声が無いときに現れる。
-# 発言としてそのまま採用すると評価が歪むため、短い出力がこれらに一致したら捨てる。
-_HALLUCINATIONS = (
-    "ご視聴ありがとうございました", "ご視聴ありがとうございます",
-    "本日はお越しいただきありがとうございます",
-    "最後までご視聴いただきありがとうございました",
-    "チャンネル登録をお願いします", "チャンネル登録よろしくお願いします",
-    "お疲れ様でした", "おつかれさまでした",
-    "ありがとうございました", "ありがとうございます",
-    "字幕は自動生成されています", "音声はありません",
-    "終わり", "以上です",
-)
-
-# これより小さい録音は「実質無音」とみなす（16kHz WAV でおよそ0.5秒未満）
-_MIN_AUDIO_BYTES = 16000
-
-
-def _looks_like_hallucination(text: str) -> bool:
-    """無音時に出る定型句かどうか。"""
-    t = re.sub(r"[。、,.!?！？\s]", "", text)
-    if len(t) > 30:            # 長い発言は本物とみなす
-        return False
-    for h in _HALLUCINATIONS:
-        if t == re.sub(r"[。、,.!?！？\s]", "", h):
-            return True
-    return False
-
-
 def transcribe(audio_file):
-    """録音した音声を文字起こしする。
+    """録音した音声を文字起こしする。無音・失敗時は None。
 
-    無音のまま送ると Whisper が学習データ由来の定型句を返すことがあるため、
-    録音サイズと出力内容の両方で弾く。失敗・無音のときは None を返す。
+    無音判定とモデル選択は stt モジュールに集約している。
     """
     try:
-        size = getattr(audio_file, "size", None)
-        if size is not None and size < _MIN_AUDIO_BYTES:
-            st.warning("音声が短すぎます。マイクに向かって話してから停止してください。")
-            return None
+        audio_bytes = audio_file.getvalue()
+    except Exception:
+        audio_bytes = audio_file.read() if hasattr(audio_file, "read") else b""
 
-        res = _client.audio.transcriptions.create(
-            model="whisper-1",
-            file=("speech.wav", audio_file, "audio/wav"),
-            language="ja",
-            temperature=0,
-        )
-        text = (res.text or "").strip()
-
-        if not text:
-            st.warning("音声を認識できませんでした。もう一度録音してください。")
-            return None
-        if _looks_like_hallucination(text):
-            st.warning("発話を検出できませんでした。もう一度録音してください。")
-            return None
-        return text
-    except Exception as e:
-        st.error(f"文字起こしに失敗しました: {e}")
+    text, err = stt.transcribe(
+        _client,
+        audio_bytes,
+        hint=stt.build_hint(
+            base="議論での発言。",
+            # 面接画面で登録した固有名詞をそのまま流用する
+            terms=st.session_state.get("stt_terms", []),
+        ),
+    )
+    if err:
+        st.warning(err)
         return None
+    return text
 
 
 def generate_hint():
