@@ -115,25 +115,16 @@ def display_terms_and_checkbox(key_name=None):
     st.caption("※ お申し込み手続きの中で、利用規約への同意をあらためて確認いたします。")
     return True
 
-# ★ サイドバーに表示する、詳細な法的ページ（5種）の読み込み用
-LEGAL_DOC_FILES = {
-    "プライバシーポリシー": "legal/privacy_policy.md",
-    "利用規約": "legal/terms_of_service.md",
-    "特定商取引法に基づく表示": "legal/tokushoho.md",
-    "お問い合わせ": "legal/contact.md",
-    "運営者情報": "legal/operator_info.md",
+# ★ 法的文書は LP 側（mokipra.jp）を正本とする。
+#    アプリ内にも全文を置くと二重管理になり、片方だけ更新して
+#    内容が食い違う事故が起きるため、ここではリンクのみを持つ。
+LEGAL_SITE = "https://mokipra.jp"
+LEGAL_DOC_LINKS = {
+    "利用規約": f"{LEGAL_SITE}/terms.html",
+    "プライバシーポリシー": f"{LEGAL_SITE}/privacy.html",
+    "特定商取引法に基づく表示": f"{LEGAL_SITE}/tokushoho.html",
+    "お問い合わせ・運営者情報": f"{LEGAL_SITE}/contact.html",
 }
-
-@st.cache_data
-def load_legal_doc(doc_name: str) -> str:
-    path = LEGAL_DOC_FILES.get(doc_name)
-    if not path:
-        return "ページが見つかりませんでした。"
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-    except FileNotFoundError:
-        return f"⚠️ {path} が見つかりません。legalフォルダの配置を確認してください。"
 
 # ====================================================
 # 🎨 グローバルスタイル
@@ -879,9 +870,10 @@ if not st.session_state.user:
     </div>
     """, unsafe_allow_html=True)
 
-    for _doc_name in LEGAL_DOC_FILES.keys():
-        with st.expander(_doc_name, icon=":material/description:"):
-            st.markdown(load_legal_doc(_doc_name))
+    _lc = st.columns(len(LEGAL_DOC_LINKS))
+    for _col, (_label, _url) in zip(_lc, LEGAL_DOC_LINKS.items()):
+        with _col:
+            st.link_button(_label, _url, use_container_width=True)
 
     st.markdown("""
     <div style="text-align:center; color:#64748b; font-size:0.8rem; margin-top: 28px; padding-bottom: 12px;">
@@ -1010,7 +1002,11 @@ def create_checkout_session(user_id, plan_type):
             consent_collection={"terms_of_service": "required"},
             custom_text={
                 "terms_of_service_acceptance": {
-                    "message": f"[利用規約・特定商取引法に基づく表示]({current_url})をご確認のうえ、同意してください。"
+                    "message": (
+                        f"[利用規約]({LEGAL_SITE}/terms.html)および"
+                        f"[特定商取引法に基づく表示]({LEGAL_SITE}/tokushoho.html)"
+                        "をご確認のうえ、同意してください。"
+                    )
                 }
             },
             success_url=f"{current_url}?payment=success",
@@ -1146,13 +1142,9 @@ with st.sidebar:
             
     st.markdown("---")
     with st.expander("利用規約・法的情報", icon=":material/gavel:"):
-        legal_page = st.radio(
-            "表示する項目を選択",
-            list(LEGAL_DOC_FILES.keys()),
-            key="legal_page_select",
-            label_visibility="collapsed",
-        )
-        st.markdown(load_legal_doc(legal_page))
+        st.caption("各文書は公式サイトに掲載しています。別ウィンドウで開きます。")
+        for _label, _url in LEGAL_DOC_LINKS.items():
+            st.link_button(_label, _url, use_container_width=True)
 
     st.markdown("---")
     st.link_button("バグ報告・ご要望", "https://forms.gle/uZkRncaJMA9SZw8j9", use_container_width=True, icon=":material/feedback:")
