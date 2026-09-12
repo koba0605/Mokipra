@@ -7,6 +7,7 @@ from supabase import create_client, Client
 from streamlit_option_menu import option_menu
 
 import gd  # グループディスカッション機能（別モジュール）
+import stt  # 音声認識の共通処理（無音判定・文字起こし）
 from streamlit_lottie import st_lottie
 import requests
 import io
@@ -320,6 +321,31 @@ st.html("""
     /* ---- チャット ---- */
     [data-testid="stChatMessage"] { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; animation: mkpRise .45s cubic-bezier(.22,.9,.3,1) both; }
 
+    /* ---- 録音の手順パネル ---- */
+    .mkp-rec { background: #EEF1F6; border: 1px solid #C9D4E4; border-radius: 10px;
+        padding: 14px 18px 12px; margin: 6px 0 10px; }
+    .mkp-rec .hd { font-size: .88rem; font-weight: 700; color: var(--ai) !important;
+        margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+    .mkp-rec .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--seal);
+        display: inline-block; flex: 0 0 auto; }
+    .mkp-rec ol { margin: 0; padding-left: 1.25rem; }
+    .mkp-rec li { font-size: .84rem; color: var(--ink-soft) !important; line-height: 1.9; }
+    .mkp-rec li b { color: var(--ink) !important; }
+
+    /* 標準の録音ウィジェットを、押せる場所と分かるように強調する */
+    [data-testid="stAudioInput"] {
+        border: 2px dashed #6FBBDE !important;
+        border-radius: 10px !important;
+        background: #FFFFFF !important;
+        padding: 8px 10px !important;
+    }
+    [data-testid="stAudioInput"] button {
+        background: var(--seal) !important;
+        border-color: var(--seal) !important;
+        color: #FFFFFF !important;
+    }
+    [data-testid="stAudioInput"] button svg { fill: #FFFFFF !important; }
+
     /* ---- プラン限定バッジ ---- */
     .mkp-plan-tag { display: inline-block; background: var(--seal); color: #fff !important;
         font-size: .68rem; font-weight: 700; letter-spacing: .1em; padding: 3px 12px;
@@ -565,28 +591,21 @@ def generate_interview_audio(text: str) -> bytes:
 WHISPER_MAX_BYTES = 24 * 1024 * 1024  # OpenAI APIの上限(25MB)に対する安全マージン
 
 def transcribe_audio(audio_bytes: bytes) -> tuple:
-    """音声バイト列を日本語テキストに変換する。戻り値は (テキスト, エラーメッセージ)。"""
-    if not audio_bytes:
-        return "", "音声データが空です。"
-    if len(audio_bytes) > WHISPER_MAX_BYTES:
-        return "", "録音が長すぎます。1回の回答は3分以内を目安にしてください。"
-    try:
-        buf = io.BytesIO(audio_bytes)
-        buf.name = "answer.wav"
-        result = client.audio.transcriptions.create(
-            model="whisper-1",
-            file=buf,
-            language="ja",
-            # 面接文脈をヒントとして与えると、専門用語や固有名詞の精度が上がる
-            prompt="これは就職活動・大学院入試の面接における応募者の回答です。志望動機、自己PR、ガクチカ、研究内容などが含まれます。",
-        )
-        transcribed = (result.text or "").strip()
-        if not transcribed:
-            return "", "音声を認識できませんでした。もう少し大きな声で、静かな場所でお試しください。"
-        return transcribed, None
-    except Exception as e:
-        logger.error(f"transcribe_audio failed: {e}")
-        return "", "音声の変換に失敗しました。もう一度お試しいただくか、テキスト入力をご利用ください。"
+    """音声バイト列を日本語テキストに変換する。戻り値は (テキスト, エラーメッセージ)。
+
+    無音判定とモデル選択は stt モジュールに集約している。
+    ヒントは短く保つ。長い文脈ヒントを渡すと、無音時にその文脈に沿った
+    文章を生成させる原因になるため。
+    """
+    return stt.transcribe(
+        client,
+        audio_bytes,
+        hint=stt.build_hint(
+            base="面接の回答。",
+            terms=st.session_state.get("stt_terms", []),
+        ),
+    )
+
 
 stripe.api_key = get_secret("STRIPE_SECRET_KEY", "")
 STRIPE_PRICE_ID_PRO = get_secret("STRIPE_PRICE_ID_PRO", "")
@@ -672,15 +691,17 @@ if not st.session_state.user:
             f'<span class="mkp-plan-tag">{_plan_tag}</span></div>'
         ) if _plan_tag else ""
         with _col:
-            st.markdown(f"""
-            <div class="mkp-card" style="background: rgba(255,255,255,0.85); padding: 20px; border-radius: 14px;
-                        border: 1px solid #cbd5e1; height: 100%; min-height: 210px;">
-                <div class="mkp-feat-icon">{_icon_svg}</div>
-                <h5 style="color: #0f172a; text-align: center; margin: 8px 0 8px 0;">{_title}</h5>
-                {_badge}
-                <p style="color: #475569; font-size: 0.88rem; margin: 0; line-height: 1.7;">{_desc}</p>
-            </div>
-            """, unsafe_allow_html=True)
+            _card_html = (
+                '<div class="mkp-card" style="background: rgba(255,255,255,0.85);'
+                ' padding: 20px; border-radius: 14px; border: 1px solid #cbd5e1;'
+                ' height: 100%; min-height: 210px;">'
+                f'<div class="mkp-feat-icon">{_icon_svg}</div>'
+                f'<h5 style="color:#0f172a; text-align:center; margin:8px 0 8px 0;">{_title}</h5>'
+                f'{_badge}'
+                f'<p style="color:#475569; font-size:0.88rem; margin:0; line-height:1.7;">{_desc}</p>'
+                '</div>'
+            )
+            st.markdown(_card_html, unsafe_allow_html=True)
 
 
     st.markdown("<div style='height: 32px;'></div>", unsafe_allow_html=True)
@@ -1074,6 +1095,7 @@ if "page_state" not in st.session_state: st.session_state.page_state = "setup"
 if "autoplay_latest" not in st.session_state: st.session_state.autoplay_latest = False
 if "has_voice_input" not in st.session_state: st.session_state.has_voice_input = False
 if "pending_transcript" not in st.session_state: st.session_state.pending_transcript = ""
+if "stt_terms" not in st.session_state: st.session_state.stt_terms = []
 if "last_audio_digest" not in st.session_state: st.session_state.last_audio_digest = None
 if "ad_countdown_finished" not in st.session_state: st.session_state.ad_countdown_finished = False
 if "show_history" not in st.session_state: st.session_state.show_history = False
@@ -1277,12 +1299,60 @@ if st.session_state.page_state == "setup":
         st.markdown('<div class="glass-card"><p class="mkp-eyebrow">SETUP</p><h3 style="margin:0 0 8px;">シチュエーション設定</h3><p>練習したい面接の種別と業界を選んでください。</p>', unsafe_allow_html=True)
         if lottie_interview: st_lottie(lottie_interview, height=160, key="interview_anim")
         
+        # 大学院・推薦入試では「業界」ではなく「学部・専攻」を選ばせる。
+        # 面接官が問う内容がそもそも違うため、選択肢を切り替える。
+        FACULTY_OPTIONS = [
+            "指定なし",
+            "情報・コンピュータ科学",
+            "電気・電子・通信工学",
+            "機械・航空宇宙工学",
+            "建築・土木工学",
+            "材料・化学工学",
+            "生物・生命科学",
+            "数学・物理学",
+            "医学・薬学・看護学",
+            "経済学・経営学",
+            "法学・政治学",
+            "社会学・心理学",
+            "文学・言語学・歴史学",
+            "教育学",
+            "農学・環境科学",
+        ]
+        INDUSTRY_OPTIONS = ["指定なし", "IT・Web・通信", "飲食・サービス", "金融・コンサル",
+                            "メーカー・製造", "医療・福祉", "教育・公務員"]
+
         col_m1, col_m2 = st.columns(2)
         with col_m1:
             interview_mode = st.radio("▼ 面接の種別を選択", ["アルバイト面接", "新卒就活面接", "中途採用（転職）面接", "大学院・推薦入試面接"])
         with col_m2:
-            industry_mode = st.radio("▼ 志望業界を選択", ["指定なし", "IT・Web・通信", "飲食・サービス", "金融・コンサル", "メーカー・製造", "医療・福祉", "教育・公務員"])
+            if "大学院" in interview_mode or "推薦" in interview_mode:
+                industry_mode = st.radio("▼ 志望する学部・専攻を選択", FACULTY_OPTIONS)
+                st.caption("選んだ分野の基礎知識を踏まえた質問が生成されます。")
+            else:
+                industry_mode = st.radio("▼ 志望業界を選択", INDUSTRY_OPTIONS)
             
+        # 音声認識は固有名詞に弱い。事前に登録しておくと、その語を優先して当てる。
+        # 漢字の読みを推測させるより、正解を先に渡す方が確実。
+        with st.expander("音声入力の精度を上げる（名前・大学名・企業名の登録）"):
+            st.caption(
+                "音声で回答する場合、固有名詞は誤変換されやすくなります。"
+                "ここに登録しておくと、その表記で認識されやすくなります。"
+            )
+            stt_name = st.text_input(
+                "お名前（漢字）", max_chars=40,
+                placeholder="例：小早川 優太",
+                key="stt_name_input",
+            )
+            stt_terms_raw = st.text_input(
+                "よく話す固有名詞（読点区切り）", max_chars=200,
+                placeholder="例：立命館大学、情報理工学部、深層学習、株式会社〇〇",
+                key="stt_terms_input",
+            )
+            st.caption("大学名・学部名・研究テーマ・志望企業名などを入れておくと効果的です。")
+
+        _terms = [stt_name] + [t.strip() for t in re.split(r"[、,]", stt_terms_raw or "")]
+        st.session_state.stt_terms = [t for t in _terms if t and t.strip()]
+
         st.markdown("<hr style='margin:15px 0;'>", unsafe_allow_html=True)
         is_max = current_user_plan == "Max"
         st.markdown('<p class="mkp-eyebrow" style="margin-top:18px;">MAX ONLY</p>', unsafe_allow_html=True)
@@ -1325,7 +1395,7 @@ if st.session_state.page_state == "setup":
                 ・回答に説得力があっても、安易に称賛だけで終わらせず、
                 「なぜその手法が最適だと言えるのか」「反証や限界は何か」といった批判的な追加質問を織り交ぜてください。
                 """
-                field_label = "【志望専攻・研究分野】"
+                field_label = "【志望する学部・専攻】"
                 role_desc = f"あなたは大学院・推薦入試の厳格な面接官（教授・選考委員）です。ユーザーは{user_term}です。"
             else:
                 organization_term = "「当社」または「弊社」"
@@ -1335,10 +1405,33 @@ if st.session_state.page_state == "setup":
 
             field_instruction = f"\n{field_label}\n{industry_mode}" if industry_mode != "指定なし" else ""
 
+            # 氏名が登録されていれば、面接官が正しい表記で呼びかけられるようにする
+            _reg_name = (st.session_state.get("stt_terms") or [""])[0]
+            name_instruction = (
+                f"\n【応募者の氏名】\n{_reg_name}\n"
+                "・音声認識の結果に氏名の誤変換があっても、この表記が正しいものとして扱ってください。\n"
+                "・呼びかけるときはこの表記を使ってください（毎回は呼ばず、要所で構いません）。"
+            ) if _reg_name else ""
+
             if is_grad_school:
+                _field = industry_mode if industry_mode != "指定なし" else "志望分野"
                 expertise_instruction = f"""
-                ・志望する研究分野（{industry_mode}）における「研究計画」「問題意識」「志望動機」「大学院で学びたいこと」を深く追及してください。
+                ・志望する研究分野（{_field}）における「研究計画」「問題意識」「志望動機」「大学院で学びたいこと」を深く追及してください。
                 ・就職活動の面接ではなく、学術的な熱意・論理性・基礎知識を見極めるアカデミックな質疑応答を行ってください。
+
+                【専門分野の扱い】
+                あなたは{_field}を専門とする教員です。この分野の学部レベルの基礎概念、
+                代表的な理論・手法、研究上の典型的な論点を把握している前提で質問してください。
+
+                ・その分野の学部生が当然知っているべき基礎知識を、口頭試問として1〜2問織り交ぜてください。
+                　例：定義を説明させる、二つの手法の違いを問う、前提条件が崩れたらどうなるかを問う。
+                ・専門用語は説明せずに使って構いません。相手が理解できているかを見るのも面接の目的です。
+                ・応募者が専門用語を使ったら、その定義や適用条件を掘り下げてください。
+                　「なぜその手法を選んだのか」「他の手法ではいけない理由は何か」を問います。
+                ・ただし、あなたの知識が及ばない最先端の内容を断定的に否定してはいけません。
+                　疑問がある場合は「その主張の根拠を説明してください」と問い返す形にします。
+                ・分野が「指定なし」の場合は、専門知識を問う質問は避け、
+                　研究への姿勢と論理性を見る一般的な質問に留めてください。
                 """
             else:
                 expertise_instruction = "応募者の人柄や実務適性について淡々と深掘りしてください。発言に事実誤認があれば指摘してください。"
@@ -1355,7 +1448,7 @@ if st.session_state.page_state == "setup":
             es_instruction = f"\n【事前提出書類（ES/研究計画書）】\n{final_es_text}\n※書類の内容を踏まえて具体的に質問してください。" if is_max and final_es_text.strip() else ""
 
             dynamic_system_prompt = f"""
-            {role_desc} あなたの名前は「Moki」です。{field_instruction}{es_instruction}
+            {role_desc} あなたの名前は「Moki」です。{field_instruction}{name_instruction}{es_instruction}
             
             【重要なルール】
             ・所属組織のことは必ず{organization_term}と呼んでください。「貴社」や「御社」は絶対に使わないでください。
@@ -1574,13 +1667,40 @@ elif st.session_state.page_state == "interview":
                 )
 
                 if answer_mode == "🎤 音声で回答":
-                    st.caption("マイクのアイコンを押して録音を開始し、話し終えたら停止してください。本番同様、声に出して答える練習ができます。")
+                    # st.audio_input はマイクのアイコンだけが置かれる見た目で、
+                    # 何を押せば始まるのか伝わらない。明示的な開始ボタンを前に置く。
+                    _rec_key = f"rec_open_{st.session_state.turn_count}"
+                    audio_value = None
 
-                    audio_value = st.audio_input(
-                        "回答を録音する",
-                        key=f"audio_in_{st.session_state.turn_count}",
-                        label_visibility="collapsed",
-                    )
+                    if not st.session_state.get(_rec_key):
+                        if st.button("音声入力を開始する", type="primary",
+                                     use_container_width=True,
+                                     icon=":material/mic:",
+                                     key=f"rec_start_{st.session_state.turn_count}"):
+                            st.session_state[_rec_key] = True
+                            st.rerun()
+                        st.caption("押すと録音パネルが開きます。")
+                    else:
+                        st.markdown(
+                            '<div class="mkp-rec">'
+                            '<p class="hd"><span class="dot"></span>録音の使い方</p>'
+                            '<ol>'
+                            '<li>下の<b>赤いマイク</b>を押すと録音が始まります</li>'
+                            '<li>話し終わったら<b>停止</b>を押します</li>'
+                            '<li>自動で文字に起こされ、下の欄に入ります</li>'
+                            '</ol></div>',
+                            unsafe_allow_html=True,
+                        )
+
+                        audio_value = st.audio_input(
+                            "ここを押して話す",
+                            key=f"audio_in_{st.session_state.turn_count}",
+                        )
+
+                        if st.button("音声入力を閉じる", use_container_width=True,
+                                     key=f"rec_close_{st.session_state.turn_count}"):
+                            st.session_state[_rec_key] = False
+                            st.rerun()
 
                     if audio_value is not None:
                         audio_bytes = audio_value.getvalue()
