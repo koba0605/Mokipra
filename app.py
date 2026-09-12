@@ -260,11 +260,11 @@ st.html("""
     .mkp-sec-lead { text-align: center; color: var(--muted) !important; font-size: .86rem !important; font-weight: 500 !important; margin: -10px 0 24px !important; }
 
     /* ---- ヒーロー ---- */
-    .mkp-hero { text-align: center; padding: 36px 16px 10px; animation: mkpRise .8s cubic-bezier(.22,.9,.3,1) both; }
+    .mkp-hero { text-align: center; padding: 56px 16px 10px; animation: mkpRise .8s cubic-bezier(.22,.9,.3,1) both; }
     .mkp-hero-icon { display: inline-block; margin-bottom: 20px; position: relative; animation: mkpFloat 6s ease-in-out 1.2s infinite; }
     .mkp-hero-icon::before { content: ""; position: absolute; inset: -22%; border-radius: 50%; background: radial-gradient(circle, rgba(34,56,92,.14) 0%, rgba(34,56,92,0) 68%); animation: mkpGlowSoft 5s ease-in-out infinite; z-index: 0; }
     .mkp-hero-icon img { position: relative; z-index: 1; }
-    .mkp-hero-icon img { width: clamp(58px, 8vw, 76px) !important; height: clamp(58px, 8vw, 76px) !important; margin-right: 0 !important; border-radius: 24% !important; box-shadow: 0 6px 20px rgba(27,30,33,.12); }
+    .mkp-hero-icon img { width: clamp(66px, 10vw, 98px) !important; height: clamp(66px, 10vw, 98px) !important; margin-right: 0 !important; border-radius: 24% !important; box-shadow: 0 6px 20px rgba(27,30,33,.12); }
     .mkp-hero-title { font-family: var(--serif); font-weight: 800; font-size: clamp(2.4rem, 7vw, 3.5rem); line-height: 1.05; margin: 0; letter-spacing: .06em; color: var(--ink) !important; animation: mkpLetter 1.1s cubic-bezier(.22,.9,.3,1) .15s both; }
     .mkp-hero-kana { color: var(--muted) !important; font-size: .7rem !important; letter-spacing: .44em; text-indent: .44em; margin: 14px 0 0 !important; font-weight: 500 !important; }
     .mkp-hero-rule { width: 40px; height: 2px; margin: 26px auto 22px; background: var(--ai); animation: mkpRule .8s cubic-bezier(.22,.9,.3,1) .25s both; }
