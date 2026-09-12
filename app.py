@@ -120,10 +120,10 @@ def display_terms_and_checkbox(key_name=None):
 #    内容が食い違う事故が起きるため、ここではリンクのみを持つ。
 LEGAL_SITE = "https://mokipra.jp"
 LEGAL_DOC_LINKS = {
-    "利用規約": f"{LEGAL_SITE}/terms.html",
-    "プライバシーポリシー": f"{LEGAL_SITE}/privacy.html",
-    "特定商取引法に基づく表示": f"{LEGAL_SITE}/tokushoho.html",
-    "お問い合わせ・運営者情報": f"{LEGAL_SITE}/contact.html",
+    "利用規約": f"{LEGAL_SITE}/terms",
+    "プライバシーポリシー": f"{LEGAL_SITE}/privacy",
+    "特定商取引法に基づく表示": f"{LEGAL_SITE}/tokushoho",
+    "お問い合わせ・運営者情報": f"{LEGAL_SITE}/contact",
 }
 
 # ====================================================
@@ -1003,8 +1003,8 @@ def create_checkout_session(user_id, plan_type):
             custom_text={
                 "terms_of_service_acceptance": {
                     "message": (
-                        f"[利用規約]({LEGAL_SITE}/terms.html)および"
-                        f"[特定商取引法に基づく表示]({LEGAL_SITE}/tokushoho.html)"
+                        f"[利用規約]({LEGAL_SITE}/terms)および"
+                        f"[特定商取引法に基づく表示]({LEGAL_SITE}/tokushoho)"
                         "をご確認のうえ、同意してください。"
                     )
                 }
