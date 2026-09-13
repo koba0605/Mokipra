@@ -98,6 +98,56 @@ META_BLOCK = f"""{BEGIN}
       }}
       /* 読み込み中の地色。白背景が一瞬出るのを防ぐ */
       html, body {{ background: #F4F4F0; }}
+
+      /* ---- 処理中のローディングバー ----
+         Streamlit は実行中に stApp の data-test-script-state を
+         running に切り替える。これを手がかりに上端へバーを出す。
+         標準のステータス表示（Stopボタン）は隠しているため、
+         代わりに「今処理中である」ことをこれで伝える。 */
+      [data-testid="stApp"]::before {{
+        content: "";
+        position: fixed;
+        top: 0; left: 0;
+        height: 3px; width: 100%;
+        z-index: 999999;
+        background: linear-gradient(90deg,
+          rgba(34,56,92,0) 0%,
+          #22385C 35%,
+          #8FCDEA 65%,
+          rgba(34,56,92,0) 100%);
+        background-size: 40% 100%;
+        background-repeat: no-repeat;
+        opacity: 0;
+        transition: opacity .18s ease;
+        pointer-events: none;
+      }}
+      [data-testid="stApp"][data-test-script-state="running"]::before,
+      [data-testid="stApp"][data-test-script-state="rerunRequested"]::before {{
+        opacity: 1;
+        animation: mkpLoadBar 1.1s cubic-bezier(.4,0,.2,1) infinite;
+      }}
+      @keyframes mkpLoadBar {{
+        0%   {{ background-position: -40% 0; }}
+        100% {{ background-position: 140% 0; }}
+      }}
+
+      /* ---- 再実行中に画面が薄くなるのを防ぐ ----
+         Streamlit は更新待ちの要素へ data-stale を付けて
+         半透明にする。切り替わるたびに全体がもやがかって見えるため、
+         不透明のままにする。 */
+      [data-stale="true"],
+      [data-testid="stElementContainer"][data-stale="true"],
+      .element-container[data-stale="true"],
+      [data-testid="stVerticalBlock"][data-stale="true"] {{
+        opacity: 1 !important;
+        filter: none !important;
+        transition: none !important;
+      }}
+      [data-testid="stApp"][data-test-script-state="running"] .stMarkdown,
+      [data-testid="stApp"][data-test-script-state="running"] [data-testid="stVerticalBlock"] {{
+        opacity: 1 !important;
+        filter: none !important;
+      }}
     </style>
     {END}"""
 
