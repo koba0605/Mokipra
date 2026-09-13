@@ -7,6 +7,7 @@ from supabase import create_client, Client
 from streamlit_option_menu import option_menu
 
 import gd  # グループディスカッション機能（別モジュール）
+import es  # エントリーシート添削機能（別モジュール）
 import stt  # 音声認識の共通処理（無音判定・文字起こし）
 from streamlit_lottie import st_lottie
 import requests
@@ -1199,6 +1200,36 @@ if st.session_state.page_state == "setup":
         """, unsafe_allow_html=True)
         
         # ------------------------------------------------------------------
+
+        # エントリーシート添削への導線（Pro / Max 限定）
+
+        # ------------------------------------------------------------------
+
+        st.markdown("""
+        <div class="glass-card">
+            <p class="mkp-eyebrow">ENTRY SHEET</p>
+            <h3 style="margin:0 0 12px;">書いたESを、採用担当者の視点で添削</h3>
+            <p style="margin-bottom:16px;">字数・具体性・論理の一貫性を10段階で評価し、弱い箇所を引用して指摘します。<br>そのESを読んだ面接官が深掘りしそうな質問も提示します。</p>
+            <div style="margin-top:14px;">
+                <span class="feature-badge">該当箇所を引用して指摘</span>
+                <span class="feature-badge">言い換えの候補</span>
+                <span class="feature-badge">想定質問3つ</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if current_user_plan == "Free" and not GD_OPEN_TO_FREE:
+            st.info("エントリーシート添削は Pro / Max プラン限定の機能です。")
+        else:
+            if st.button("エントリーシートを添削する", key="go_es",
+                         type="primary", use_container_width=True,
+                         icon=":material/edit_document:"):
+                st.session_state.page_state = "es"
+                st.rerun()
+
+        st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
+
+        # ------------------------------------------------------------------
         # グループディスカッション練習への導線（Pro / Max 限定）
         # ------------------------------------------------------------------
         st.markdown("""
@@ -1497,6 +1528,47 @@ if st.session_state.page_state == "setup":
             st.session_state.start_time = time.time()
             st.session_state.page_state = "interview"
             st.rerun()
+
+# ====================================================
+# 【画面ES】エントリーシート添削
+#   本体は es.py 側にある。ここでは依存の受け渡しだけを行う。
+# ====================================================
+elif st.session_state.page_state == "es":
+
+    def _es_exit():
+        st.session_state.page_state = "setup"
+        st.rerun()
+
+    def _es_started():
+        increment_user_usage(user_id)
+
+    def _es_finished(score, context):
+        save_interview_history(user_id, score, context)
+
+    _es_is_trial = (current_user_plan == "Free" and GD_OPEN_TO_FREE)
+
+    if current_user_plan == "Free" and not GD_OPEN_TO_FREE:
+        st.error("エントリーシート添削は Pro / Max プラン限定の機能です。")
+        if st.button("戻る", key="es_free_back"):
+            st.session_state.page_state = "setup"
+            st.rerun()
+    elif (not _es_is_trial) and current_daily_usage >= current_limit:
+        st.error("本日の利用回数の上限に達しました。明日リセットされます。")
+        if st.button("戻る", key="es_limit_back"):
+            st.session_state.page_state = "setup"
+            st.rerun()
+    else:
+        if _es_is_trial:
+            st.caption("お試し公開中のため、この添削は利用回数を消費しません。")
+        es.render(
+            client=client,
+            model=LLM_MODEL,
+            plan=current_user_plan,
+            on_exit=_es_exit,
+            on_session_start=(None if _es_is_trial else _es_started),
+            on_finish=_es_finished,
+            render_ads=(render_sponsor_ads if current_user_plan == "Free" else None),
+        )
 
 # ====================================================
 # 【画面GD】グループディスカッション練習
