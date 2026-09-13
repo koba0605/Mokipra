@@ -165,7 +165,14 @@ st.html("""
     .stDeployButton { display: none !important; }
     .stAppDeployButton { display: none !important; }
     [data-testid="stAppDeployButton"] { display: none !important; }
-    [data-testid="stStatusWidget"] { visibility: hidden !important; display: none !important; }
+    [data-testid="stStatusWidget"],
+    [data-testid="stToolbar"],
+    [data-testid="stToolbarActions"],
+    [data-testid="stDecoration"] {
+        display: none !important; visibility: hidden !important;
+        opacity: 0 !important; pointer-events: none !important;
+    }
+    header[data-testid="stHeader"] { background: transparent !important; height: 0 !important; }
 
     /* ---- 地色と基本のタイポグラフィ ---- */
     .stApp { background: var(--paper); font-family: var(--sans); }
