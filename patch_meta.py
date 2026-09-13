@@ -1,7 +1,6 @@
-"""
-Streamlit の index.html に SEO 用 meta タグを注入する。
+"""Streamlit の index.html に SEO / PWA 用のタグを注入する。
 
-Streamlit は meta description を設定する API を持たないため、
+Streamlit には meta タグや manifest を設定する API が無いため、
 インストール済みパッケージ内の static/index.html を直接書き換える。
 
 - マーカーコメントで囲むことで、何度実行しても重複しない（冪等）
@@ -11,7 +10,7 @@ Streamlit は meta description を設定する API を持たないため、
 使い方:
     python patch_meta.py
 Render の Start Command:
-    python patch_meta.py && streamlit run app.py --server.port $PORT --server.address 0.0.0.0
+    python patch_meta.py && streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
 """
 
 from pathlib import Path
@@ -22,13 +21,16 @@ import streamlit
 # ---------------------------------------------------------------
 # 設定（ここだけ書き換える）
 # ---------------------------------------------------------------
-SITE_URL = "https://mokipra.jp"
+APP_URL = "https://app.mokipra.jp"   # このアプリ自身のURL
+SITE_URL = "https://mokipra.jp"      # LP（公式サイト）のURL
+
 TITLE = "Mokipra（モキプラ）- AI模擬面接パートナー"
 DESCRIPTION = (
     "AIが面接官として質問し、回答をその場で評価するオンライン模擬面接サービス。"
     "アルバイト・新卒就活・エンジニア転職・大学院入試の面接練習に対応。"
     "音声入力で本番に近い形式の練習ができます。"
 )
+
 # config.toml の enableStaticServing = true により
 # ./static/ 配下は /app/static/<filename> で配信される
 ICON_LINKS = """<link rel="icon" type="image/png" sizes="48x48" href="/app/static/favicon-48.png" />
@@ -37,44 +39,96 @@ ICON_LINKS = """<link rel="icon" type="image/png" sizes="48x48" href="/app/stati
     <link rel="icon" type="image/png" href="/app/static/favicon.png" />
     <link rel="apple-touch-icon" href="/app/static/apple-touch-icon.png" />"""
 
-# OG 画像(1200x630)を作成したら、下を有効な URL に変更して
-# META_BLOCK 内の og:image / twitter:image のコメントアウトを外す
-OG_IMAGE_PATH = None
-
-# JS を実行しないクローラ向けのフォールバック本文
-NOSCRIPT_TEXT = (
-    "Mokipra（モキプラ）は、AIが面接官となって模擬面接を行うWebサービスです。"
-    "アルバイト・新卒就活・エンジニア転職・大学院入試の4つの面接シーンに対応し、"
-    "回答内容を6段階で評価します。音声入力にも対応しています。"
-)
-
 BEGIN = "<!-- BEGIN MOKIPRA SEO -->"
 END = "<!-- END MOKIPRA SEO -->"
 
+# アプリ本体は検索結果に出す必要がない。
+# LP（mokipra.jp）を検索結果に出したいので noindex にする。
+# このとき canonical は必ず自分自身を指すこと。
+# 他ページを指す canonical と noindex を併用すると指示が矛盾し、
+# Google が処理を保留する。
 META_BLOCK = f"""{BEGIN}
     <meta name="description" content="{DESCRIPTION}" />
     <meta name="robots" content="noindex, follow" />
-    <link rel="canonical" href="https://app.mokipra.jp/" />
+    <link rel="canonical" href="{APP_URL}/" />
 
     {ICON_LINKS}
+
+    <!-- PWA（ホーム画面への追加） -->
+    <link rel="manifest" href="/app/static/manifest.json" />
+    <meta name="theme-color" content="#22385C" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Mokipra" />
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Mokipra" />
     <meta property="og:title" content="{TITLE}" />
     <meta property="og:description" content="{DESCRIPTION}" />
-    <meta property="og:url" content="{SITE_URL}/" />
+    <meta property="og:url" content="{APP_URL}/" />
     <meta property="og:locale" content="ja_JP" />
 
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="{TITLE}" />
     <meta name="twitter:description" content="{DESCRIPTION}" />
+
+    <style>
+      /* Streamlit 標準のUIを最初の描画から隠す。
+         app.py 側にも同じ指定があるが、そちらは Python 実行後に
+         注入されるため、読み込み中の数秒間だけ表示されてしまう。
+         ここに置くことで、初回描画の時点から適用される。 */
+      [data-testid="stStatusWidget"],
+      [data-testid="stToolbar"],
+      [data-testid="stToolbarActions"],
+      [data-testid="stMainMenu"],
+      [data-testid="stAppDeployButton"],
+      [data-testid="stDecoration"],
+      #MainMenu,
+      .stDeployButton,
+      .stAppDeployButton {{
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+      }}
+      header[data-testid="stHeader"] {{
+        background: transparent !important;
+        height: 0 !important;
+      }}
+      /* 読み込み中の地色。白背景が一瞬出るのを防ぐ */
+      html, body {{ background: #F4F4F0; }}
+    </style>
     {END}"""
 
-NOSCRIPT_BLOCK = f"""{BEGIN}
+# JS を実行しないクローラ向けのフォールバック本文と、
+# Service Worker の登録。SW はキャッシュを行わない最小構成。
+NOSCRIPT_TEXT = (
+    "Mokipra（モキプラ）は、AIが面接官となって模擬面接を行うWebサービスです。"
+    "アルバイト・新卒就活・エンジニア転職・大学院入試の4つの面接シーンに対応し、"
+    "グループディスカッション練習もできます。"
+)
+
+BODY_BLOCK = f"""{BEGIN}
     <noscript>
       <h1>{TITLE}</h1>
       <p>{NOSCRIPT_TEXT}</p>
+      <p><a href="{SITE_URL}">Mokipra 公式サイト</a></p>
     </noscript>
+    <script>
+      // ホーム画面への追加を有効にするための登録。
+      // sw.js 自体はキャッシュを行わないので、デプロイ後に古い画面が
+      // 残ることはない。
+      if ("serviceWorker" in navigator) {{
+        window.addEventListener("load", function () {{
+          navigator.serviceWorker
+            .register("/app/static/sw.js", {{ scope: "/" }})
+            .catch(function (e) {{
+              console.warn("service worker registration failed", e);
+            }});
+        }});
+      }}
+    </script>
     {END}"""
 
 
@@ -108,13 +162,13 @@ def main() -> int:
     html = html.replace('<html lang="en">', '<html lang="ja">', 1)
     html = html.replace("<title>Streamlit</title>", f"<title>{TITLE}</title>", 1)
 
-    # <body> 直後に noscript フォールバックを差し込む
+    # <body> 直後に noscript と Service Worker 登録を差し込む
     body_idx = html.find("<body")
     if body_idx != -1:
         insert_at = html.find(">", body_idx)
         if insert_at != -1:
             insert_at += 1
-            html = html[:insert_at] + f"\n    {NOSCRIPT_BLOCK}" + html[insert_at:]
+            html = html[:insert_at] + f"\n    {BODY_BLOCK}" + html[insert_at:]
 
     try:
         index_path.write_text(html, encoding="utf-8")
