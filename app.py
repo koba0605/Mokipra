@@ -172,7 +172,21 @@ st.html("""
         display: none !important; visibility: hidden !important;
         opacity: 0 !important; pointer-events: none !important;
     }
-    header[data-testid="stHeader"] { background: transparent !important; height: 0 !important; }
+    /* ヘッダーは背景だけ透明にする。高さを 0 にすると、
+       この中にあるサイドバーの開閉ボタンまで潰れて開けなくなる。 */
+    header[data-testid="stHeader"] { background: transparent !important; }
+
+    /* サイドバーと、その開閉ボタンは必ず表示する */
+    [data-testid="stSidebar"],
+    [data-testid="stSidebarCollapsedControl"],
+    [data-testid="stSidebarCollapseButton"],
+    [data-testid="collapsedControl"] {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+    [data-testid="stSidebarCollapsedControl"] { z-index: 999990 !important; }
 
     /* ---- 地色と基本のタイポグラフィ ---- */
     .stApp { background: var(--paper); font-family: var(--sans); }
@@ -258,16 +272,98 @@ st.html("""
     .mkp-sec-lead { text-align: center; color: var(--muted) !important; font-size: .86rem !important; font-weight: 500 !important; margin: -10px 0 24px !important; }
 
     /* ---- ヒーロー ---- */
-    .mkp-hero { text-align: center; padding: 56px 16px 10px; animation: mkpRise .8s cubic-bezier(.22,.9,.3,1) both; }
-    .mkp-hero-icon { display: inline-block; margin-bottom: 20px; position: relative; animation: mkpFloat 6s ease-in-out 1.2s infinite; }
+    .mkp-hero {
+        text-align: center; position: relative;
+        padding: 26px 16px 8px;
+        animation: mkpRise .8s cubic-bezier(.22,.9,.3,1) both;
+    }
+    /* 上部の細い罫。中央だけ藍を濃くして視線を集める */
+    .mkp-hero-frame {
+        width: min(540px, 86%); height: 1px; margin: 0 auto 40px;
+        background: linear-gradient(90deg,
+            rgba(224,224,216,0) 0%,
+            var(--line) 22%,
+            var(--ai) 50%,
+            var(--line) 78%,
+            rgba(224,224,216,0) 100%);
+    }
+    /* 特徴を示すピル。文章で説明するより早く伝わる */
+    .mkp-hero-chips {
+        display: flex; flex-wrap: wrap; justify-content: center;
+        gap: 8px; margin: 26px auto 0; max-width: 620px;
+        animation: mkpRise .7s cubic-bezier(.22,.9,.3,1) .75s both;
+    }
+    .mkp-chip {
+        font-size: .74rem; font-weight: 600; letter-spacing: .04em;
+        color: var(--ink-soft) !important;
+        background: rgba(255,255,255,.72);
+        border: 1px solid var(--line);
+        border-radius: 999px; padding: 6px 15px;
+        transition: border-color .2s ease, color .2s ease;
+    }
+    .mkp-chip:hover { border-color: var(--ai); color: var(--ai) !important; }
+    .mkp-hero-note {
+        font-size: .78rem !important; color: var(--muted) !important;
+        margin: 22px 0 0 !important; font-weight: 500 !important;
+        letter-spacing: .02em;
+        animation: mkpRise .7s cubic-bezier(.22,.9,.3,1) .9s both;
+    }
+    .mkp-hero-icon { display: inline-block; margin-bottom: 26px; position: relative; animation: mkpFloat 6s ease-in-out 1.2s infinite; }
     .mkp-hero-icon::before { content: ""; position: absolute; inset: -22%; border-radius: 50%; background: radial-gradient(circle, rgba(34,56,92,.14) 0%, rgba(34,56,92,0) 68%); animation: mkpGlowSoft 5s ease-in-out infinite; z-index: 0; }
     .mkp-hero-icon img { position: relative; z-index: 1; }
-    .mkp-hero-icon img { width: clamp(66px, 10vw, 98px) !important; height: clamp(66px, 10vw, 98px) !important; margin-right: 0 !important; border-radius: 24% !important; box-shadow: 0 6px 20px rgba(27,30,33,.12); }
-    .mkp-hero-title { font-family: var(--serif); font-weight: 800; font-size: clamp(2.4rem, 7vw, 3.5rem); line-height: 1.05; margin: 0; letter-spacing: .06em; color: var(--ink) !important; animation: mkpLetter 1.1s cubic-bezier(.22,.9,.3,1) .15s both; }
-    .mkp-hero-kana { color: var(--muted) !important; font-size: .7rem !important; letter-spacing: .44em; text-indent: .44em; margin: 14px 0 0 !important; font-weight: 500 !important; }
-    .mkp-hero-rule { width: 40px; height: 2px; margin: 26px auto 22px; background: var(--ai); animation: mkpRule .8s cubic-bezier(.22,.9,.3,1) .25s both; }
-    .mkp-hero-tag { font-family: var(--serif); font-size: clamp(1.15rem, 2.6vw, 1.55rem) !important; font-weight: 700 !important; color: var(--ink) !important; margin: 0 0 16px !important; letter-spacing: .04em; animation: mkpRise .7s cubic-bezier(.22,.9,.3,1) .45s both; }
-    .mkp-hero-desc { max-width: 620px; margin: 0 auto !important; color: var(--ink-soft) !important; font-size: .92rem !important; line-height: 2.05 !important; font-weight: 400 !important; animation: mkpRise .7s cubic-bezier(.22,.9,.3,1) .6s both; }
+    .mkp-hero-icon img { width: clamp(66px, 10vw, 98px) !important; height: clamp(66px, 10vw, 98px) !important; margin-right: 0 !important; border-radius: 24% !important; box-shadow: 0 10px 30px rgba(27,30,33,.16); }
+    /* Streamlit の [data-testid="stMarkdownContainer"] h1 は、クラス指定より
+       詳細度が高いため、そのままだとフォント指定が上書きされてLPと見た目が変わる。
+       LPと同じ書式に揃えるため、各プロパティに !important を付ける。 */
+    .mkp-hero-title,
+    [data-testid="stMarkdownContainer"] h1.mkp-hero-title {
+        font-family: var(--serif) !important;
+        font-weight: 800 !important;
+        font-size: clamp(2.4rem, 7vw, 3.5rem) !important;
+        line-height: 1.05 !important;
+        letter-spacing: .06em !important;
+        color: var(--ink) !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        animation: mkpLetter 1.1s cubic-bezier(.22,.9,.3,1) .15s both;
+    }
+    /* Streamlit が見出しに付けるアンカーリンクを隠す */
+    .mkp-hero-title a, .mkp-hero-tag a { display: none !important; }
+    .mkp-hero-kana,
+    [data-testid="stMarkdownContainer"] p.mkp-hero-kana {
+        color: var(--muted) !important;
+        font-size: .7rem !important;
+        letter-spacing: .44em !important;
+        text-indent: .44em !important;
+        margin: 14px 0 0 !important;
+        font-weight: 500 !important;
+        line-height: 1.4 !important;
+    }
+    /* 見出し下の短い罫。朱を差し色にして和の印象を強める */
+    .mkp-hero-rule {
+        width: 46px; height: 2px; margin: 30px auto 26px;
+        background: var(--seal);
+        animation: mkpRule .8s cubic-bezier(.22,.9,.3,1) .25s both;
+    }
+    .mkp-hero-tag,
+    [data-testid="stMarkdownContainer"] p.mkp-hero-tag {
+        font-family: var(--serif) !important;
+        font-size: clamp(1.15rem, 2.6vw, 1.55rem) !important;
+        font-weight: 700 !important;
+        color: var(--ink) !important;
+        margin: 0 0 16px !important;
+        letter-spacing: .04em !important;
+        line-height: 1.5 !important;
+        animation: mkpRise .7s cubic-bezier(.22,.9,.3,1) .45s both;
+    }
+    .mkp-hero-desc,
+    [data-testid="stMarkdownContainer"] p.mkp-hero-desc {
+        max-width: 560px; margin: 0 auto !important;
+        color: var(--ink-soft) !important;
+        font-size: .9rem !important; line-height: 2.1 !important;
+        font-weight: 400 !important;
+        animation: mkpRise .7s cubic-bezier(.22,.9,.3,1) .6s both;
+    }
 
     /* ---- 朱印（評価スコア）---- */
     .mkp-seal-wrap { display: flex; align-items: center; gap: 26px; padding: 6px 0 22px; }
@@ -633,21 +729,32 @@ if st.session_state.get("access_token") and st.session_state.get("refresh_token"
         logger.warning(f"セッション復元エラー: {e}")
 
 if not st.session_state.user:
-    _hero_icon = get_icon_html("mokipra_icon_official.png", size="clamp(66px, 10vw, 98px)")
+    _hero_icon = get_icon_html("mokipra_icon_official.png", size="clamp(72px, 11vw, 104px)")
     _hero_html = (
         '<div class="mkp-hero">'
+        # 上部の細い罫。紙面の余白を締めるための意匠
+        '<div class="mkp-hero-frame"></div>'
         '<div class="mkp-hero-icon">' + _hero_icon + '</div>'
         '<h1 class="mkp-hero-title">Mokipra</h1>'
         '<p class="mkp-hero-kana">M O K I P R A</p>'
         '<div class="mkp-hero-rule"></div>'
         '<p class="mkp-hero-tag">面接の不安を、自信に変える。</p>'
-        '<p class="mkp-hero-desc">Mokipra（モキプラ）は、本番さながらの緊張感で練習できるAI模擬面接パートナーです。'
-        '最新のAIがあなたの回答をリアルタイムで分析し、面接後にはプロ視点での総合評価や改善アドバイスを提供します。</p>'
+        '<p class="mkp-hero-desc">'
+        'AIが面接官として質問し、回答をその場で評価します。<br>'
+        'アルバイト・新卒就活・エンジニア転職・大学院入試に対応。'
+        '</p>'
+        '<div class="mkp-hero-chips">'
+        '<span class="mkp-chip">音声で本番形式</span>'
+        '<span class="mkp-chip">その場で自動採点</span>'
+        '<span class="mkp-chip">グループディスカッション</span>'
+        '<span class="mkp-chip">エントリーシート添削</span>'
+        '</div>'
+        '<p class="mkp-hero-note">メールアドレスだけで、無料ではじめられます</p>'
         '</div>'
     )
     st.markdown(_hero_html, unsafe_allow_html=True)
 
-    st.markdown("<div style='height: 26px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height: 52px;'></div>", unsafe_allow_html=True)
 
     # ====================================================
     # 📢 サービス紹介セクション（ログイン前に表示）
@@ -1346,12 +1453,12 @@ if st.session_state.page_state == "setup":
             )
             stt_name = st.text_input(
                 "お名前（漢字）", max_chars=40,
-                placeholder="例：小早川 優太",
+                placeholder="例：山田 太郎",
                 key="stt_name_input",
             )
             stt_terms_raw = st.text_input(
                 "よく話す固有名詞（読点区切り）", max_chars=200,
-                placeholder="例：立命館大学、情報理工学部、深層学習、株式会社〇〇",
+                placeholder="例：〇〇大学、〇〇学部、研究テーマ、志望企業名",
                 key="stt_terms_input",
             )
             st.caption("大学名・学部名・研究テーマ・志望企業名などを入れておくと効果的です。")
