@@ -15,6 +15,8 @@ SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 app = FastAPI()
 
+# プランは Free / Pro の2種類に統合した。
+# Max は廃止したが、過去の契約が残っていた場合に備えて判定には含める。
 PLAN_WEIGHTS = {"Free": 0, "Pro": 1, "Max": 2}
 
 
@@ -38,7 +40,7 @@ async def stripe_webhook(request: Request):
         logger.error("Invalid signature detected.")
         raise HTTPException(status_code=400, detail="Invalid signature")
 
-    # ① 決済完了時の処理（Pro / Max へのアップグレード）
+    # ① 決済完了時の処理（Pro へのアップグレード）
     if event['type'] == 'checkout.session.completed':
         session = event['data']['object']
 
@@ -53,7 +55,13 @@ async def stripe_webhook(request: Request):
             currency = currency.lower() if currency else 'jpy'
 
             if currency in ['jpy', 'usd']:
-                new_plan = "Pro" if amount == 480 else "Max" if amount == 980 else "Free"
+                # 金額からの判定。980円は旧Maxプランで、現在は新規契約されない。
+                if amount == 480:
+                    new_plan = "Pro"
+                elif amount == 980:
+                    new_plan = "Max"   # 旧プランの契約が残っている場合のみ
+                else:
+                    new_plan = "Free"
             else:
                 new_plan = "Free"
 
