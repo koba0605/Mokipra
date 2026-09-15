@@ -91,7 +91,6 @@ TERMS_OF_SERVICE_TEXT = """
 
 **第2条（利用料金）**
 ・Proプラン: 月額 480円（税込）
-・Maxプラン: 月額 980円（税込）
 
 **第3条（お支払い方法と決済時期）**
 Stripeを利用したクレジットカード決済となります。初回お支払い時に1ヶ月分が決済され、以降は毎月同日に自動更新（自動課金）されます。
@@ -608,6 +607,7 @@ def transcribe_audio(audio_bytes: bytes) -> tuple:
 
 stripe.api_key = get_secret("STRIPE_SECRET_KEY", "")
 STRIPE_PRICE_ID_PRO = get_secret("STRIPE_PRICE_ID_PRO", "")
+# Max は廃止。過去の設定が残っていても害はないため取得のみ残す。
 STRIPE_PRICE_ID_MAX = get_secret("STRIPE_PRICE_ID_MAX", "")
 APP_URL = get_secret("APP_URL", "http://localhost:8501")
 
@@ -616,10 +616,6 @@ if not STRIPE_PRICE_ID_PRO or "XXX" in STRIPE_PRICE_ID_PRO:
     st.error("❌ Stripe設定エラー：Proプランの Price ID が未設定です。secrets.toml または環境変数 STRIPE_PRICE_ID_PRO を確認してください。")
     st.stop()
 
-if not STRIPE_PRICE_ID_MAX or "XXX" in STRIPE_PRICE_ID_MAX:
-    logger.error("Stripe Price ID (Max) not properly configured")
-    st.error("❌ Stripe設定エラー：Maxプランの Price ID が未設定です。.streamlit/secrets.toml を確認してください。")
-    st.stop()
 
 # ====================================================
 # 🔒 Supabase Auth (標準SDK認証 & セッション復元)
@@ -677,10 +673,10 @@ if not st.session_state.user:
         ("group", "グループディスカッション練習",
          "AI参加者4名と本番形式で議論します。司会・書記・タイムキーパーの役割も選べ、"
          "終了後は5軸10段階で評価されます。",
-         "Pro / Max 限定"),
+         "Pro 限定"),
         ("doc", "書類を読み込んだ深い面接",
          "エントリーシートや研究計画書のPDFを読み込ませると、その内容に踏み込んだ質問が生成されます。",
-         "Max 限定"),
+         "Pro 限定"),
     ]
     for _col, (_icon, _title, _desc, _plan_tag) in zip(
             [feat_col1, feat_col2, feat_col3, feat_col4], _features):
@@ -753,7 +749,7 @@ if not st.session_state.user:
     </div>
     """, unsafe_allow_html=True)
 
-    plan_col1, plan_col2, plan_col3 = st.columns(3)
+    plan_col1, plan_col2 = st.columns(2)
     _plans = [
         {
             "name": "Free", "price": "0", "unit": "円", "limit": "1日 1回",
@@ -764,25 +760,18 @@ if not st.session_state.user:
             "badge": "", "badge_bg": "",
         },
         {
-            "name": "Pro", "price": "480", "unit": "円 / 月", "limit": "1日 10回",
+            "name": "Pro", "price": "480", "unit": "円 / 月", "limit": "1日 5回",
             "items": ["AI音声面接（1回10ターン）", "自動採点・アドバイス",
-                      "グループディスカッション練習", "面接履歴の保存"],
+                      "グループディスカッション練習", "エントリーシート添削",
+                      "PDF読み込み・書類に基づく深掘り質問",
+                      "面接官の性格変更", "面接履歴の保存"],
             "bg": "#FFFFFF",
             "border": "#22385C", "accent": "#22385C",
             "shadow": "0 4px 18px rgba(34,56,92,.10)",
             "badge": "いちばん人気", "badge_bg": "#22385C",
         },
-        {
-            "name": "Max", "price": "980", "unit": "円 / 月", "limit": "1日 10回",
-            "items": ["Proのすべての機能", "グループディスカッション練習",
-                      "PDF読み込み対応", "書類に基づく深掘り質問"],
-            "bg": "#FFFFFF",
-            "border": "#B8443A", "accent": "#B8443A",
-            "shadow": "0 4px 18px rgba(184,68,58,.10)",
-            "badge": "書類対応", "badge_bg": "#B8443A",
-        },
     ]
-    for _col, _p in zip([plan_col1, plan_col2, plan_col3], _plans):
+    for _col, _p in zip([plan_col1, plan_col2], _plans):
         _li = "".join(
             "<li style='color:#475569; font-size:0.85rem; margin-bottom:6px; line-height:1.5;'>"
             + _i + "</li>"
@@ -990,9 +979,9 @@ def create_checkout_session(user_id, plan_type):
     if not stripe.api_key:
         return None, "STRIPE_SECRET_KEY が設定されていません。"
 
+    # プランは Pro に一本化した。Max は廃止。
     prices = {
         "Pro": get_secret("STRIPE_PRICE_ID_PRO", ""),
-        "Max": get_secret("STRIPE_PRICE_ID_MAX", ""),
     }
     
     price_id = prices.get(plan_type, "")
@@ -1030,7 +1019,7 @@ current_daily_usage = usage_data["count"]
 
 # ====================================================
 # 🧪 テスト用アカウントのプラン上書き
-#   決済を通さずに Pro / Max の動作を確認するための仕組み。
+#   決済を通さずに Pro の動作を確認するための仕組み。
 #   メールアドレスは公開リポジトリに置かず、環境変数から読む。
 #     TEST_PRO_EMAILS = "a@example.com,b@example.com"
 #     TEST_MAX_EMAILS = "c@example.com"
@@ -1049,8 +1038,9 @@ def _test_plan_override(current_plan):
         raw = get_secret(key, "") or ""
         return {e.strip().lower() for e in raw.split(",") if e.strip()}
 
+    # Max は廃止したため、TEST_MAX_EMAILS も Pro として扱う
     if email in _emails("TEST_MAX_EMAILS"):
-        return "Max", True
+        return "Pro", True
     if email in _emails("TEST_PRO_EMAILS"):
         return "Pro", True
     return current_plan, False
@@ -1076,13 +1066,22 @@ if _is_test_account:
     logger.info(f"Test plan override applied: user={user_id} plan={current_user_plan}")
     st.caption(f"🧪 テストアカウントとして {current_user_plan} プランで動作しています。")
 
-PLAN_LIMITS = {"Free": 1, "Pro": 10, "Max": 10}
-current_limit = PLAN_LIMITS[current_user_plan]
+# プランは Free / Pro の2本に統合した。
+# 旧Maxの契約者が残っていた場合に備え、Max は Pro と同等に扱う。
+# プランは Free / Pro の2種類。Max は廃止したが、
+# 過去に契約した行が残っていても動くよう判定には含めておく。
+PLAN_LIMITS = {"Free": 1, "Pro": 5, "Max": 5}
+current_limit = PLAN_LIMITS.get(current_user_plan, 1)
+
+# 有料プランかどうか。以後はこのフラグで判定する
+IS_PAID = current_user_plan in ("Pro", "Max")
 
 # 1回の面接で行う質疑応答の回数。有料プランは本番に近い長さにする。
-TOTAL_TURNS = 10 if current_user_plan in ("Pro", "Max") else 4
-LLM_MODEL = "gpt-4o" if current_user_plan == "Max" else "gpt-4o-mini"
-MAX_INPUT_CHARS = 1500 if current_user_plan == "Max" else 900
+TOTAL_TURNS = 10 if IS_PAID else 4
+# 原価の大半は音声入力で、LLMの差額は体感ほど効かない。
+# 全プランで gpt-4o-mini に統一する。
+LLM_MODEL = "gpt-4o-mini"
+MAX_INPUT_CHARS = 1500 if IS_PAID else 900
 
 _masthead = (
     '<div class="mkp-masthead">' + app_icon +
@@ -1130,7 +1129,7 @@ with st.sidebar:
     if current_user_plan in ["Free", "Pro"]:
         st.markdown("---")
         st.markdown('<p class="mkp-eyebrow" style="margin-top:14px;">UPGRADE</p>', unsafe_allow_html=True)
-        st.caption("Pro/Maxプランで面接回数と高度なフィードバックを解放！")
+        st.caption("Proプランで面接回数と高度なフィードバックを解放！")
         
         # 規約の展開表示（同意はStripe Checkout側で取得する）
         display_terms_and_checkbox("agree_sidebar")
@@ -1139,14 +1138,10 @@ with st.sidebar:
             if "sb_pro_url" not in st.session_state:
                 with st.spinner("リンク生成中..."):
                     pro_url, _ = create_checkout_session(user_id, "Pro")
-                    max_url, _ = create_checkout_session(user_id, "Max")
                     if pro_url: st.session_state["sb_pro_url"] = pro_url
-                    if max_url: st.session_state["sb_max_url"] = max_url
 
             if current_user_plan == "Free" and "sb_pro_url" in st.session_state:
                 st.link_button("Proプラン  480円 / 月", st.session_state["sb_pro_url"], type="primary", use_container_width=True)
-            if "sb_max_url" in st.session_state:
-                st.link_button("Maxプラン  980円 / 月", st.session_state["sb_max_url"], type="primary", use_container_width=True)
             
     st.markdown("---")
     with st.expander("利用規約・法的情報", icon=":material/gavel:"):
@@ -1172,16 +1167,12 @@ if st.session_state.page_state == "setup":
             if "setup_pro_url" not in st.session_state:
                 with st.spinner("決済リンクを安全に準備中..."):
                     pro_url, _ = create_checkout_session(user_id, "Pro")
-                    max_url, _ = create_checkout_session(user_id, "Max")
                     if pro_url: st.session_state["setup_pro_url"] = pro_url
-                    if max_url: st.session_state["setup_max_url"] = max_url
 
-            if "setup_pro_url" in st.session_state and "setup_max_url" in st.session_state:
-                col_pay1, col_pay2 = st.columns(2)
-                with col_pay1:
-                    st.link_button("Proプランに登録して続ける", st.session_state["setup_pro_url"], type="primary", use_container_width=True)
-                with col_pay2:
-                    st.link_button("Maxプランに登録", st.session_state["setup_max_url"], type="primary", use_container_width=True)
+            if "setup_pro_url" in st.session_state:
+                st.link_button("Proプランに登録して続ける",
+                               st.session_state["setup_pro_url"],
+                               type="primary", use_container_width=True)
             else:
                 st.error("❌ 決済リンクの準備に失敗しました。")
             
@@ -1201,7 +1192,7 @@ if st.session_state.page_state == "setup":
         
         # ------------------------------------------------------------------
 
-        # エントリーシート添削への導線（Pro / Max 限定）
+        # エントリーシート添削への導線（Pro 限定）
 
         # ------------------------------------------------------------------
 
@@ -1219,7 +1210,7 @@ if st.session_state.page_state == "setup":
         """, unsafe_allow_html=True)
 
         if current_user_plan == "Free" and not GD_OPEN_TO_FREE:
-            st.info("エントリーシート添削は Pro / Max プラン限定の機能です。")
+            st.info("エントリーシート添削は Proプラン限定の機能です。")
         else:
             if st.button("エントリーシートを添削する", key="go_es",
                          type="primary", use_container_width=True,
@@ -1230,7 +1221,7 @@ if st.session_state.page_state == "setup":
         st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
 
         # ------------------------------------------------------------------
-        # グループディスカッション練習への導線（Pro / Max 限定）
+        # グループディスカッション練習への導線（Pro 限定）
         # ------------------------------------------------------------------
         st.markdown("""
         <div class="glass-card" style="position:relative; border:2px solid var(--ai);
@@ -1251,7 +1242,7 @@ if st.session_state.page_state == "setup":
         """, unsafe_allow_html=True)
 
         if current_user_plan == "Free" and not GD_OPEN_TO_FREE:
-            st.info("グループディスカッション練習は Pro / Max プラン限定の機能です。")
+            st.info("グループディスカッション練習は Proプラン限定の機能です。")
         else:
             if current_user_plan == "Free":
                 st.success("現在、Freeプランでもグループディスカッションを試せます（お試し公開中）。")
@@ -1268,25 +1259,17 @@ if st.session_state.page_state == "setup":
             display_terms_and_checkbox("agree_inline")
 
             if True:
-                col_up1, col_up2 = st.columns(2)
-                with col_up1:
-                    if current_user_plan == "Free":
-                        if "inline_pro_url" not in st.session_state:
-                            with st.spinner("リンク準備中..."):
-                                url, _ = create_checkout_session(user_id, "Pro")
-                                if url: st.session_state["inline_pro_url"] = url
-                        if "inline_pro_url" in st.session_state:
-                            st.link_button("Proプラン  480円 / 月", st.session_state["inline_pro_url"], type="primary", use_container_width=True)
-                    else:
-                        st.info("あなたは現在Proプランをご利用中です。")
-                
-                with col_up2:
-                    if "inline_max_url" not in st.session_state:
+                if current_user_plan == "Free":
+                    if "inline_pro_url" not in st.session_state:
                         with st.spinner("リンク準備中..."):
-                            url, _ = create_checkout_session(user_id, "Max")
-                            if url: st.session_state["inline_max_url"] = url
-                    if "inline_max_url" in st.session_state:
-                        st.link_button("Maxプラン  980円 / 月", st.session_state["inline_max_url"], type="primary", use_container_width=True)
+                            url, _ = create_checkout_session(user_id, "Pro")
+                            if url: st.session_state["inline_pro_url"] = url
+                    if "inline_pro_url" in st.session_state:
+                        st.link_button("Proプラン  480円 / 月",
+                                       st.session_state["inline_pro_url"],
+                                       type="primary", use_container_width=True)
+                else:
+                    st.info("あなたは現在Proプランをご利用中です。")
             st.markdown("</div>", unsafe_allow_html=True)
         
         st.markdown("""
@@ -1308,19 +1291,12 @@ if st.session_state.page_state == "setup":
                     <td style="padding: 10px;">標準的な深掘り</td>
                     <td style="padding: 10px; color:#64748b;">❌ 講評のみ</td>
                 </tr>
-                <tr style="border-bottom: 1px solid #cbd5e1; background: var(--ai-wash);">
+                <tr style="background: var(--ai-wash);">
                     <td style="padding: 10px; font-weight:bold; color:var(--ai);">Pro (480円)</td>
-                    <td style="padding: 10px; color:var(--ai); font-weight:bold;">10回</td>
-                    <td style="padding: 10px; color:var(--ai);">4回 (ショート)</td>
-                    <td style="padding: 10px; color:var(--ai);">標準的な深掘り</td>
+                    <td style="padding: 10px; color:var(--ai); font-weight:bold;">5回</td>
+                    <td style="padding: 10px; color:var(--ai); font-weight:bold;">10回 (本格面接)</td>
+                    <td style="padding: 10px; color:var(--ai); font-weight:bold;">性格変更・ES読込・GD・ES添削</td>
                     <td style="padding: 10px; color:var(--ai); font-weight:bold;">✅ 全回答リライト付き</td>
-                </tr>
-                <tr style="background: var(--seal-wash);">
-                    <td style="padding: 10px; font-weight:bold; color:var(--seal);">Max (980円)</td>
-                    <td style="padding: 10px; color:var(--seal); font-weight:bold;">10回</td>
-                    <td style="padding: 10px; color:var(--seal); font-weight:bold;">10回 (本格面接)</td>
-                    <td style="padding: 10px; color:var(--seal); font-weight:bold;">役員クラスの鋭い圧迫・専門面接 / ES読込</td>
-                    <td style="padding: 10px; color:var(--seal); font-weight:bold;">✅ 全回答リライト付き</td>
                 </tr>
             </table>
         </div>
@@ -1384,7 +1360,8 @@ if st.session_state.page_state == "setup":
         st.session_state.stt_terms = [t for t in _terms if t and t.strip()]
 
         st.markdown("<hr style='margin:15px 0;'>", unsafe_allow_html=True)
-        is_max = current_user_plan == "Max"
+        # 旧Max限定だった機能は、Proへ統合したため有料プラン全体で使える
+        is_max = IS_PAID
         st.markdown('<p class="mkp-eyebrow" style="margin-top:18px;">MAX ONLY</p>', unsafe_allow_html=True)
         
         col_m3, col_m4 = st.columns(2)
@@ -1405,8 +1382,8 @@ if st.session_state.page_state == "setup":
                 else:
                     st.error("⚠️ 有効なエントリーシートや履歴書(PDF)ではない可能性があります。")
 
-        es_manual_text = st.text_area("✍️ またはテキストで直接入力（PDFがない場合）", height=100, disabled=not is_max, placeholder="【Maxプラン限定】自己PRや研究内容を入力")
-        if not is_max: st.caption("🔒 Maxプランにアップグレードすると、面接官の性格変更や書類(PDF)の読み込み機能が解放されます！")
+        es_manual_text = st.text_area("✍️ またはテキストで直接入力（PDFがない場合）", height=100, disabled=not is_max, placeholder="【Proプラン限定】自己PRや研究内容を入力")
+        if not is_max: st.caption("🔒 Proプランにアップグレードすると、面接官の性格変更や書類(PDF)の読み込み機能が解放されます。")
         st.markdown("</div>", unsafe_allow_html=True)
     
         if st.button("面接をスタートする", type="primary", use_container_width=True, icon=":material/play_arrow:"):
@@ -1548,7 +1525,7 @@ elif st.session_state.page_state == "es":
     _es_is_trial = (current_user_plan == "Free" and GD_OPEN_TO_FREE)
 
     if current_user_plan == "Free" and not GD_OPEN_TO_FREE:
-        st.error("エントリーシート添削は Pro / Max プラン限定の機能です。")
+        st.error("エントリーシート添削は Proプラン限定の機能です。")
         if st.button("戻る", key="es_free_back"):
             st.session_state.page_state = "setup"
             st.rerun()
@@ -1591,7 +1568,7 @@ elif st.session_state.page_state == "gd":
     _gd_is_trial = (current_user_plan == "Free" and GD_OPEN_TO_FREE)
 
     if current_user_plan == "Free" and not GD_OPEN_TO_FREE:
-        st.error("グループディスカッション練習は Pro / Max プラン限定の機能です。")
+        st.error("グループディスカッション練習は Proプラン限定の機能です。")
         if st.button("戻る", key="gd_free_back"):
             st.session_state.page_state = "setup"
             st.rerun()
@@ -2029,7 +2006,7 @@ elif st.session_state.page_state == "result":
 - **内定・合格レベルのリライト例**:
 > （プロが作成した具体的かつ説得力のある理想的な回答文をそのまま提示）
 """
-                else:  # Maxプラン
+                else:  # 有料プラン（Pro）
                     academic_or_biz = "学術的論理・専門知識の正確性・研究の新規性と実現可能性" if is_grad else "役員・専門家視点での経営的妥当性・費用対効果・論理的一貫性"
                     format_instruction = f"""
 【出力フォーマット】
@@ -2044,7 +2021,7 @@ elif st.session_state.page_state == "result":
 - （※ここに、言葉の解像度や論理破綻・根拠の弱さなど、細部・構造に着目して厳しく指摘・提案してください）
 {speaking_eval_instruction}
 
-### 🧠 10ターン一貫性・ファクトチェック分析（Maxプラン限定）
+### 🧠 10ターン一貫性・ファクトチェック分析
 - **論理の一貫性**: （10ターンの質疑応答全体を通して、主張がブレていなかったか、矛盾した回答がなかったかを検証）
 - **専門知識・ファクトの正確さ**: （発言に含まれる技術用語・業界動向・理論の間違いや嘘・前提のズレを指摘）
 - **プレッシャー・深掘り耐性**: （突っ込まれた際の切り返し力、焦りによる論理破綻の有無を評価）
@@ -2116,7 +2093,7 @@ elif st.session_state.page_state == "result":
     </div>
     <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; width: 95%; z-index: 10;">
         <div style="background: rgba(255, 255, 255, 0.95); padding: 20px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); border: 2px solid #cbd5e1;">
-            <h4 style="margin: 0 0 10px 0; color: #1e3a8a; font-size: 1.1rem;">🔒 続きは Pro / Max プラン限定</h4>
+            <h4 style="margin: 0 0 10px 0; color: #1e3a8a; font-size: 1.1rem;">🔒 続きは Proプラン限定</h4>
             <p style="margin: 0; font-size: 0.9rem; color: #475569; font-weight: bold;">
                 隠された「2つ目以降の良かった点・改善点」と、<br>
                 プロによる【内定レベルの回答リライト】を見るには<br>
@@ -2187,7 +2164,7 @@ elif st.session_state.page_state == "result":
 
     if current_user_plan == "Free":
         st.markdown("---")
-        st.warning("💡 **アドバイスを踏まえて、今すぐ次の面接でリベンジしてみませんか？**\n\nProプランにアップグレードすると、**1日10回まで練習可能**＆プロの**模範解答（リライト）**が解放されます！")
+        st.warning("💡 **アドバイスを踏まえて、今すぐ次の面接でリベンジしてみませんか？**\n\nProプランにアップグレードすると、**1日5回まで練習可能**。グループディスカッション練習、エントリーシート添削、書類(PDF)を踏まえた面接も使えます！")
         
         display_terms_and_checkbox("agree_result")
 
@@ -2195,39 +2172,16 @@ elif st.session_state.page_state == "result":
             if "result_pro_url" not in st.session_state:
                 with st.spinner("決済リンクを準備中..."):
                     pro_url, _ = create_checkout_session(user_id, "Pro")
-                    max_url, _ = create_checkout_session(user_id, "Max")
                     if pro_url: st.session_state["result_pro_url"] = pro_url
-                    if max_url: st.session_state["result_max_url"] = max_url
             
-            col_pay1, col_pay2 = st.columns(2)
-            with col_pay1:
-                if "result_pro_url" in st.session_state:
-                    st.link_button("Proプランの手続きへ", st.session_state["result_pro_url"], type="primary", use_container_width=True)
-            with col_pay2:
-                if "result_max_url" in st.session_state:
-                    st.link_button("Maxプランの手続きへ", st.session_state["result_max_url"], type="primary", use_container_width=True)
+            if "result_pro_url" in st.session_state:
+                st.link_button("Proプランの手続きへ",
+                               st.session_state["result_pro_url"],
+                               type="primary", use_container_width=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
     
-    elif current_user_plan == "Pro":
-        st.markdown("---")
-        st.info("🔥 **さらに高度な面接対策が必要ですか？**\n\nMaxプランにアップグレードすると、**10ターンの本格面接**、**役員クラスの厳格な深掘り**、**ES/研究計画書の読み込み**が解放されます！")
-        
-        display_terms_and_checkbox("agree_result_max")
-
-        if True:
-            if "upsell_max_url" not in st.session_state:
-                with st.spinner("決済リンクを準備中..."):
-                    max_url, err_msg = create_checkout_session(user_id, "Max")
-                    if max_url:
-                        st.session_state["upsell_max_url"] = max_url
-                    else:
-                        st.error(f"❌ 生成失敗: {err_msg}")
-                        
-            if "upsell_max_url" in st.session_state:
-                st.link_button("Maxプランの手続きへ", st.session_state["upsell_max_url"], type="primary", use_container_width=True)
-        
-        st.markdown("<br>", unsafe_allow_html=True)
+    # Pro が最上位プランのため、これ以上のアップセルは行わない。
 
     if st.button("新しい面接を始める", type="primary", use_container_width=True, icon=":material/refresh:"):
         st.session_state.setup_complete = False
