@@ -92,9 +92,20 @@ META_BLOCK = f"""{BEGIN}
         opacity: 0 !important;
         pointer-events: none !important;
       }}
+      /* ヘッダーは背景だけ透明にする。高さを 0 にすると、
+         この中にあるサイドバーの開閉ボタンまで潰れて開けなくなる。 */
       header[data-testid="stHeader"] {{
         background: transparent !important;
-        height: 0 !important;
+      }}
+      /* サイドバーと開閉ボタンは常に表示する */
+      [data-testid="stSidebar"],
+      [data-testid="stSidebarCollapsedControl"],
+      [data-testid="stSidebarCollapseButton"],
+      [data-testid="collapsedControl"] {{
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
       }}
       /* 読み込み中の地色。白背景が一瞬出るのを防ぐ */
       html, body {{ background: #F4F4F0; }}
