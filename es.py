@@ -22,6 +22,8 @@ import re
 
 import streamlit as st
 
+import lucide  # 絵文字の代わりに使う線画アイコン
+
 # ==============================================================================
 # app.py から注入される依存
 # ==============================================================================
@@ -188,6 +190,24 @@ def sanitize(text: str, limit: int) -> str:
 def count_chars(text: str) -> int:
     """ESの字数カウント。改行と空白は数えないのが一般的。"""
     return len(re.sub(r"[\s\u3000]", "", text or ""))
+
+
+# 状態を示す小さなカード。左端の色帯ではなくアイコンで種類を伝える。
+_CHK_ICON = {"ok": "circle-check", "warn": "triangle-alert",
+             "ng": "circle-x", "info": "info"}
+
+
+def chk(kind, title, body=""):
+    """検査結果を1件表示する。kind は ok / warn / ng / info。"""
+    ic = lucide.icon(_CHK_ICON.get(kind, "info"), size=16, stroke=2)
+    html = (
+        f'<div class="es-chk {kind}">'
+        f'<p class="hd"><span class="ic">{ic}</span>{title}</p>'
+    )
+    if body:
+        html += f'<p class="bd">{body}</p>'
+    html += "</div>"
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def render_gauge(ratio, caption=""):
@@ -555,20 +575,29 @@ _CSS = """
 .es-axis .sc { font-family: var(--serif); font-size: 1.5rem; font-weight: 800; }
 .es-axis .sc .mx { font-size: .74rem; color: var(--muted) !important; margin-left: 2px; }
 
+/* 状態は左端の色帯ではなくアイコンで示す。
+   帯は意味を色だけに頼るため、並ぶと何の色か思い出せなくなる。 */
 .es-chk { border-radius: 8px; padding: 12px 16px; margin-bottom: 9px;
   border: 1px solid var(--line); background: var(--surface); }
-.es-chk.ok { border-left: 3px solid #2E8B57; }
-.es-chk.warn { border-left: 3px solid #B8860B; }
-.es-chk.ng { border-left: 3px solid var(--seal); }
-.es-chk.info { border-left: 3px solid var(--ai); }
+.es-chk.ok   { background: #F4F9F5; border-color: #D3E4D7; }
+.es-chk.warn { background: #FCF8EE; border-color: #E8DCBE; }
+.es-chk.ng   { background: #FCF5F4; border-color: #ECD3CF; }
+.es-chk.info { background: var(--ai-wash); border-color: #CBD6E4; }
 .es-chk .hd { font-size: .87rem; font-weight: 700; color: var(--ink) !important;
-  margin: 0 0 4px; }
+  margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
+.es-chk .ic { flex: 0 0 auto; display: inline-flex; }
+.es-chk.ok   .ic { color: #2E8B57; }
+.es-chk.warn .ic { color: #9A6B00; }
+.es-chk.ng   .ic { color: var(--seal); }
+.es-chk.info .ic { color: var(--ai); }
 .es-chk .bd { font-size: .82rem; color: var(--ink-soft) !important; margin: 0;
-  line-height: 1.8; }
+  line-height: 1.8; padding-left: 26px; }
 
 .es-issue { background: var(--surface); border: 1px solid var(--line);
-  border-left: 3px solid var(--seal); border-radius: 8px;
-  padding: 15px 18px; margin-bottom: 12px; }
+  border-radius: 8px; padding: 15px 18px; margin-bottom: 12px; }
+.es-issue .no { display: flex; align-items: center; gap: 8px;
+  font-size: .72rem; font-weight: 700; letter-spacing: .06em;
+  color: var(--seal) !important; margin: 0 0 10px; }
 .es-issue .qt { font-size: .86rem; color: var(--ink) !important;
   background: #FDF3F2; border-radius: 5px; padding: 9px 13px; margin: 0 0 11px;
   line-height: 1.8; }
@@ -576,8 +605,8 @@ _CSS = """
   font-weight: 700; margin: 0 0 3px; }
 .es-issue .bd { font-size: .85rem; color: var(--ink-soft) !important;
   margin: 0 0 11px; line-height: 1.85; }
-.es-issue .rw { background: var(--ai-wash); border-left: 3px solid var(--ai);
-  border-radius: 5px; padding: 11px 14px; font-size: .86rem; line-height: 1.85;
+.es-issue .rw { background: var(--ai-wash); border: 1px solid #CBD6E4;
+  border-radius: 6px; padding: 11px 14px; font-size: .86rem; line-height: 1.85;
   color: var(--ink) !important; margin: 0; }
 
 .es-q { background: var(--surface); border: 1px solid var(--line);
@@ -665,11 +694,9 @@ def render(*, client, model="gpt-4o-mini", plan="Free",
             st.caption(f"設問：{question}")
 
         # 設問ごとに評価軸が変わることを、選んだ時点で示す
-        st.markdown(
-            f'<div class="es-chk info"><p class="hd">この設問で見られる点</p>'
-            f'<p class="bd">{esc(spec["focus"])}</p></div>',
-            unsafe_allow_html=True,
-        )
+        chk("info",
+            f'この設問で見られる点',
+            f'{esc(spec["focus"])}')
         with st.expander("評価される5つの観点を見る"):
             for name, desc in spec["axes"]:
                 st.markdown(f"**{name}** — {desc}")
@@ -844,90 +871,58 @@ def render(*, client, model="gpt-4o-mini", plan="Free",
         sec("1", "形式のチェック", "計算による判定")
 
         kind, msg = char_verdict(s["chars"], s["limit"])
-        st.markdown(
-            f'<div class="es-chk {kind}"><p class="hd">字数</p>'
-            f'<p class="bd">{esc(msg)}</p></div>',
-            unsafe_allow_html=True,
-        )
+        chk(kind,
+            f'字数',
+            f'{esc(msg)}')
 
         if s["long_sentences"]:
             ex = s["long_sentences"][0]
-            st.markdown(
-                f'<div class="es-chk warn"><p class="hd">'
-                f'一文が長い箇所が {len(s["long_sentences"])} 件</p>'
-                f'<p class="bd">70字を超える文は読み手が追えなくなります。'
-                f'例：「{esc(ex[:50])}…」</p></div>',
-                unsafe_allow_html=True,
-            )
+            chk("warn",
+                f'一文が長い箇所が {len(s["long_sentences"])} 件',
+                f'70字を超える文は読み手が追えなくなります。例：「{esc(ex[:50])}…」')
         else:
-            st.markdown(
-                f'<div class="es-chk ok"><p class="hd">文の長さ</p>'
-                f'<p class="bd">平均 {s["avg_len"]:.0f}字。読みやすい長さです。</p></div>',
-                unsafe_allow_html=True,
-            )
+            chk("ok",
+                f'文の長さ',
+                f'平均 {s["avg_len"]:.0f}字。読みやすい長さです。')
 
         if s["numbers"] == 0:
-            st.markdown(
-                '<div class="es-chk ng"><p class="hd">数字がありません</p>'
-                '<p class="bd">人数・期間・売上・順位など、数字が1つも入っていません。'
-                '具体性を示す最も簡単な方法です。</p></div>',
-                unsafe_allow_html=True,
-            )
+            chk("ng",
+                '数字がありません',
+                '人数・期間・売上・順位など、数字が1つも入っていません。具体性を示す最も簡単な方法です。')
         else:
-            st.markdown(
-                f'<div class="es-chk ok"><p class="hd">数字</p>'
-                f'<p class="bd">{s["numbers"]}箇所で使われています。</p></div>',
-                unsafe_allow_html=True,
-            )
+            chk("ok",
+                f'数字',
+                f'{s["numbers"]}箇所で使われています。')
 
         if s["vague"]:
             words = "、".join(f"{w}（{n}回）" for w, n in s["vague"][:5])
-            st.markdown(
-                f'<div class="es-chk warn"><p class="hd">中身が伝わりにくい言葉</p>'
-                f'<p class="bd">{esc(words)}<br>'
-                f'これらは誰でも書けるため、それ自体では評価されません。'
-                f'その言葉を使わずに、行動で示せないか検討してください。</p></div>',
-                unsafe_allow_html=True,
-            )
+            chk("warn",
+                f'中身が伝わりにくい言葉',
+                f'{esc(words)}<br>これらは誰でも書けるため、それ自体では評価されません。その言葉を使わずに、行動で示せないか検討してください。')
 
         if s["redundant"]:
             items = "、".join(f"「{a}」→「{b}」" for a, b, _ in s["redundant"][:4])
-            st.markdown(
-                f'<div class="es-chk info"><p class="hd">短くできる表現</p>'
-                f'<p class="bd">{esc(items)}<br>'
-                f'字数制限がある場合、ここを削ると内容を足せます。</p></div>',
-                unsafe_allow_html=True,
-            )
+            chk("info",
+                f'短くできる表現',
+                f'{esc(items)}<br>字数制限がある場合、ここを削ると内容を足せます。')
 
         if s["watashi"] >= 4:
-            st.markdown(
-                f'<div class="es-chk warn"><p class="hd">「私は」が {s["watashi"]}回</p>'
-                f'<p class="bd">主語は省略しても伝わります。'
-                f'削るだけで字数に余裕が生まれます。</p></div>',
-                unsafe_allow_html=True,
-            )
+            chk("warn",
+                f'「私は」が {s["watashi"]}回',
+                f'主語は省略しても伝わります。削るだけで字数に余裕が生まれます。')
 
         # --- 確認の反映状況 ---
         pa = st.session_state.get("es_probe_answers") or []
         answered = [x for x in pa if (x.get("a") or "").strip()]
         if pa:
             if answered:
-                st.markdown(
-                    f'<div class="es-chk ok"><p class="hd">'
-                    f'事前の確認 {len(answered)} / {len(pa)} 件に回答済み</p>'
-                    f'<p class="bd">回答内容を踏まえて添削しています。'
-                    f'本文に書かれていない情報は、その旨を指摘に含めています。</p></div>',
-                    unsafe_allow_html=True,
-                )
+                chk("ok",
+                    f'事前の確認 {len(answered)} / {len(pa)} 件に回答済み',
+                    f'回答内容を踏まえて添削しています。本文に書かれていない情報は、その旨を指摘に含めています。')
             else:
-                st.markdown(
-                    '<div class="es-chk warn"><p class="hd">'
-                    '事前の確認に回答がありません</p>'
-                    '<p class="bd">答えられなかった質問がある場合、'
-                    'その部分は自分の中でも整理できていない可能性があります。'
-                    '本文を直す前に、まずそこを考えてみてください。</p></div>',
-                    unsafe_allow_html=True,
-                )
+                chk("warn",
+                    '事前の確認に回答がありません',
+                    '答えられなかった質問がある場合、その部分は自分の中でも整理できていない可能性があります。本文を直す前に、まずそこを考えてみてください。')
 
         # --- 評価5軸（設問ごとに軸が変わる） ---
         sec("2", "評価5軸", st.session_state.get("es_preset_name", ""))
@@ -949,6 +944,9 @@ def render(*, client, model="gpt-4o-mini", plan="Free",
             for i, it in enumerate(r["issues"], 1):
                 st.markdown(
                     f'<div class="es-issue">'
+                    f'<p class="no">'
+                    f'{lucide.icon("circle-alert", size=15, stroke=2)}'
+                    f'改善点 {i}</p>'
                     f'<p class="qt">{esc(it.get("quote", ""))}</p>'
                     f'<p class="hd">何が問題か</p>'
                     f'<p class="bd">{esc(it.get("problem", ""))}</p>'
