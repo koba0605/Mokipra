@@ -20,6 +20,8 @@ import random
 
 import streamlit as st
 
+import lucide  # 絵文字の代わりに使う線画アイコン
+
 import stt  # 音声認識の共通処理
 
 # ==============================================================================
@@ -1118,10 +1120,11 @@ _CSS = """
   letter-spacing: .06em; color: var(--ink) !important; margin: 8px 0 6px; }
 .gd-sub { color: var(--muted) !important; font-size: .82rem; letter-spacing: .08em;
   margin: 0 0 22px; font-weight: 500; }
-.gd-theme { background: var(--ai-wash); border-left: 3px solid var(--ai);
-  padding: 14px 18px; border-radius: 6px; margin-bottom: 20px; }
-.gd-theme .lbl { font-size: .7rem; letter-spacing: .16em; color: var(--ai) !important;
-  font-weight: 700; margin: 0 0 4px; }
+/* 左端の色帯はやめ、枠線とアイコンで種類を示す */
+.gd-theme { background: var(--ai-wash); border: 1px solid #CBD6E4;
+  padding: 14px 18px; border-radius: 8px; margin-bottom: 20px; }
+.gd-theme .lbl { font-size: .7rem; letter-spacing: .12em; color: var(--ai) !important;
+  font-weight: 700; margin: 0 0 6px; display: flex; align-items: center; gap: 7px; }
 .gd-theme .txt { font-size: .98rem; font-weight: 700; color: var(--ink) !important; margin: 0; }
 .gd-bubble { background: var(--surface); border: 1px solid var(--line);
   border-radius: 12px; padding: 15px 18px 16px; margin-bottom: 12px; }
@@ -1160,7 +1163,8 @@ _CSS = """
 .gd-rev.good .vd { color: #2E8B57 !important; }
 .gd-rev.issue .vd { color: var(--seal) !important; }
 .gd-rev .qt { font-size: .87rem; color: var(--ink) !important; font-weight: 700;
-  margin: 0 0 8px; line-height: 1.75; padding-left: 11px; border-left: 2px solid var(--line); }
+  margin: 0 0 8px; line-height: 1.75; padding: 8px 12px;
+  background: rgba(255,255,255,.72); border-radius: 5px; }
 .gd-rev .cm { font-size: .83rem; color: var(--ink-soft) !important; margin: 0; line-height: 1.8; }
 .gd-score { text-align: center; background: var(--surface); border: 1px solid var(--line);
   border-radius: 14px; padding: 30px 20px 24px; margin: 4px 0 8px; }
@@ -1180,18 +1184,21 @@ _CSS = """
 .gd-axis .sc { font-family: var(--serif); font-size: 1.5rem; font-weight: 800; }
 .gd-axis .sc .mx { font-size: .74rem; color: var(--muted) !important; margin-left: 2px; }
 .gd-checksum { font-size: .86rem; color: var(--ink-soft) !important; margin: 0 0 4px; }
+/* 達成・未達は左端の帯ではなくアイコンと短い語で示す。
+   色だけに頼ると、並んだときにどちらが良い方か分からなくなる。 */
 .gd-chk { border-radius: 8px; padding: 11px 15px; margin-bottom: 8px;
   border: 1px solid var(--line); background: var(--surface); }
-.gd-chk.ok { border-left: 3px solid #2E8B57; }
-.gd-chk.ng { border-left: 3px solid var(--seal); }
+.gd-chk.ok { background: #F4F9F5; border-color: #D3E4D7; }
+.gd-chk.ng { background: #FCF5F4; border-color: #ECD3CF; }
 .gd-chk .hd { font-size: .87rem; font-weight: 700; color: var(--ink) !important;
-  margin: 0 0 5px; }
-.gd-chk .mk { font-size: .66rem; letter-spacing: .1em; padding: 2px 8px;
-  border-radius: 3px; margin-right: 9px; color: #fff; }
-.gd-chk.ok .mk { background: #2E8B57; }
-.gd-chk.ng .mk { background: var(--seal); }
-.gd-chk .ev { font-size: .82rem; color: var(--ink-soft) !important; margin: 0; line-height: 1.75; }
-.gd-say { background: var(--ai-wash); border-left: 3px solid var(--ai);
+  margin: 0 0 5px; display: flex; align-items: center; gap: 8px; }
+.gd-chk .mk { display: inline-flex; align-items: center; gap: 5px;
+  font-size: .66rem; letter-spacing: .08em; font-weight: 700; flex: 0 0 auto; }
+.gd-chk.ok .mk { color: #2E8B57 !important; }
+.gd-chk.ng .mk { color: var(--seal) !important; }
+.gd-chk .ev { font-size: .82rem; color: var(--ink-soft) !important; margin: 0;
+  line-height: 1.75; padding-left: 26px; }
+.gd-say { background: var(--ai-wash); border: 1px solid #CBD6E4;
   border-radius: 6px; padding: 12px 16px; font-size: .88rem; line-height: 1.9;
   color: var(--ink) !important; margin: 4px 0 2px; }
 /* 画面タイトル */
@@ -1419,7 +1426,7 @@ def render(*, client, model="gpt-4o-mini", plan="Free",
             theme = st.session_state.get("gd_gen_theme", "")
             if theme:
                 st.markdown(
-                    f'<div class="gd-theme"><p class="lbl">T H E M E</p>'
+                    f'<div class="gd-theme"><p class="lbl">' + lucide.icon("target", size=14, stroke=2) + '議論のお題</p>'
                     f'<p class="txt">{esc(theme)}</p></div>',
                     unsafe_allow_html=True,
                 )
@@ -1530,7 +1537,7 @@ def render(*, client, model="gpt-4o-mini", plan="Free",
     # ==============================================================================
     elif st.session_state.gd_stage == "discussion":
         st.markdown(
-            f'<div class="gd-theme"><p class="lbl">T H E M E</p>'
+            f'<div class="gd-theme"><p class="lbl">' + lucide.icon("target", size=14, stroke=2) + '議論のお題</p>'
             f'<p class="txt">{esc(st.session_state.gd_theme)}</p></div>',
             unsafe_allow_html=True,
         )
@@ -1836,9 +1843,12 @@ def render(*, client, model="gpt-4o-mini", plan="Free",
 
             for c in checks:
                 ok = bool(c.get("done"))
+                mark = (lucide.icon("circle-check", size=15, stroke=2) + "達成"
+                        if ok else
+                        lucide.icon("circle-x", size=15, stroke=2) + "未達")
                 st.markdown(
                     f'<div class="gd-chk {"ok" if ok else "ng"}">'
-                    f'<p class="hd"><span class="mk">{"達成" if ok else "未達"}</span>'
+                    f'<p class="hd"><span class="mk">{mark}</span>'
                     f'{esc(c.get("item",""))}</p>'
                     f'<p class="ev">{esc(c.get("evidence",""))}</p>'
                     f'</div>',
