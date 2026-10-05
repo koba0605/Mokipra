@@ -16,6 +16,7 @@ import os
 import time
 import uuid
 import re
+import threading
 import PyPDF2
 import base64
 import hashlib
@@ -1128,10 +1129,53 @@ def get_interview_history(uid):
         logger.warning(f"get_interview_history failed for {uid}: {e}")
         return []
 
+# ====================================================
+#  webhook サービスの事前起動
+# ----------------------------------------------------
+#  Render の無料プランは15分アクセスが無いとインスタンスを停止し、
+#  次のリクエストの応答に50秒以上かかる。一方 Stripe の webhook は
+#  10秒程度で応答が無いとタイムアウト扱いにするため、眠っていると
+#  1回目の配信が必ず失敗する（Stripe は再送するので最終的には届くが、
+#  「決済したのにプランが上がらない」時間が数分〜数十分発生する）。
+#
+#  常時起こしておく方法は採れない。無料枠は月750インスタンス時間しかなく、
+#  24時間稼働させると31日で744時間を消費して上限に張り付く。
+#  超えるとワークスペース内の全無料サービスが翌月まで停止するため、
+#  落とさないための対策で完全停止を招くことになる。
+#
+#  そこで「webhook が飛んでくると分かっている瞬間」にだけ起こす。
+#  決済リンクとポータルリンクを生成するタイミングがそれにあたる。
+# ====================================================
+WEBHOOK_PING_URL = get_secret("WEBHOOK_PING_URL", "https://mokipra-webhook.onrender.com/")
+
+
+def _warm_webhook():
+    """
+    webhook サービスを起こしておく。
+    結果は待たないし、失敗しても何もしない。あくまで保険であり、
+    これが動かなくても Stripe の再送によって最終的には処理される。
+    """
+    url = (WEBHOOK_PING_URL or "").strip()
+    if not url.startswith("https://"):
+        return
+
+    def _ping():
+        try:
+            # 起動完了まで待つので長めに取る。別スレッドなので画面は止まらない。
+            requests.get(url, timeout=90)
+        except Exception:
+            pass
+
+    try:
+        threading.Thread(target=_ping, daemon=True).start()
+    except Exception:
+        pass
+
+
 def create_checkout_session(user_id, plan_type):
     api_key = get_secret("STRIPE_SECRET_KEY", "")
     stripe.api_key = api_key
-    
+
     if not stripe.api_key:
         return None, "STRIPE_SECRET_KEY が設定されていません。"
 
@@ -1178,6 +1222,10 @@ def create_checkout_session(user_id, plan_type):
             cancel_url=f"{current_url}?payment=cancel",
             **_extra,
         )
+        # この先ユーザーが決済を完了すると checkout.session.completed が飛んでくる。
+        # その時に webhook サービスが眠っていると初回配信が失敗するので、
+        # いま起こしておく。
+        _warm_webhook()
         return session.url, None
     except Exception as e:
         return None, str(e)
@@ -1239,6 +1287,10 @@ def create_billing_portal_session(user_id):
             customer=customer_id,
             return_url=return_url,
         )
+        # ポータルからの解約で customer.subscription.deleted が飛んでくる。
+        # 「請求期間の終了時」設定の場合は期末まで飛ばないが、
+        # 即時に飛ぶ操作（支払い方法の更新など）もあるため起こしておく。
+        _warm_webhook()
         return portal.url, None
     except Exception as e:
         logger.error(f"Billing portal creation failed for user {uid}: {e}")
