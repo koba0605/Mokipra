@@ -7,7 +7,6 @@ from supabase import create_client, Client
 from streamlit_option_menu import option_menu
 
 import gd  # グループディスカッション機能（別モジュール）
-import lucide  # 絵文字の代わりに使う線画アイコン
 import es  # エントリーシート添削機能（別モジュール）
 import stt  # 音声認識の共通処理（無音判定・文字起こし）
 from streamlit_lottie import st_lottie
@@ -78,7 +77,7 @@ def get_secret(key, default=""):
 MAINTENANCE_MODE = get_secret("MAINTENANCE_MODE", "").lower() == "true"
 
 if MAINTENANCE_MODE:
-    st.warning("現在メンテナンス中です。しばらくしてから再度アクセスしてください。")
+    st.warning("🔧 現在メンテナンス中です。しばらくしてから再度アクセスしてください。")
     st.stop()
 
 # ====================================================
@@ -541,12 +540,68 @@ def render_sponsor_ads():
 
 
 def line_icon(name, size=34, stroke=1.5):
-    """線画アイコンを返す。実体は Lucide のパス（lucide.py）。
-
-    絵文字は環境ごとに字形と大きさが変わり、色も指定できないため使わない。
-    ここは旧実装からの呼び出し名を保つための薄い包み。
-    """
-    return lucide.icon(name, size=size, stroke=stroke)
+    paths = {
+        "mic": (
+            '<rect x="15" y="5" width="10" height="17" rx="5"/>'
+            '<path d="M10 18v1.5a10 10 0 0 0 20 0V18"/>'
+            '<path d="M20 29.5V34"/><path d="M14.5 34h11"/>'
+        ),
+        "score": (
+            '<path d="M6 33.5h28"/>'
+            '<rect x="10" y="22" width="6" height="11" rx="1.4"/>'
+            '<rect x="19" y="16" width="6" height="17" rx="1.4"/>'
+            '<rect x="28" y="25" width="6" height="8" rx="1.4"/>'
+            '<path d="M9 13.5l6.5-4 6 4.5 8-7"/>'
+            '<path d="M29.5 7h3v3"/>'
+        ),
+        # 店舗：アルバイト面接
+        "shop": (
+            '<path d="M7 14.5L9.5 7h21l2.5 7.5"/>'
+            '<path d="M9.5 14.5v18a1 1 0 0 0 1 1h19a1 1 0 0 0 1-1v-18"/>'
+            '<path d="M7 14.5h26"/>'
+            '<path d="M16 33.5V24.5h8v9"/>'
+        ),
+        # 社屋：新卒採用面接
+        "building": (
+            '<path d="M11 33.5V8a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v25.5"/>'
+            '<path d="M23 33.5V17.5h6a1 1 0 0 1 1 1v15"/>'
+            '<path d="M7.5 33.5h25"/>'
+            '<path d="M15 13h1"/><path d="M19 13h1"/>'
+            '<path d="M15 19h1"/><path d="M19 19h1"/>'
+            '<path d="M15 25h1"/><path d="M19 25h1"/>'
+            '<path d="M26 23h1"/><path d="M26 28h1"/>'
+        ),
+        # 括弧：ITエンジニア採用面接
+        "code": (
+            '<path d="M14.5 12.5L7 20l7.5 7.5"/>'
+            '<path d="M25.5 12.5L33 20l-7.5 7.5"/>'
+            '<path d="M22.5 8.5l-5 23"/>'
+        ),
+        # 角帽：大学院・推薦入試面接
+        "cap": (
+            '<path d="M20 7.5L5.5 14 20 20.5 34.5 14 20 7.5z"/>'
+            '<path d="M11 17v8.5c0 2.6 4 4.8 9 4.8s9-2.2 9-4.8V17"/>'
+            '<path d="M34.5 14v8"/>'
+        ),
+        "group": (
+            '<circle cx="12" cy="14" r="4.2"/>'
+            '<circle cx="28" cy="14" r="4.2"/>'
+            '<path d="M4.5 30v-1.5a7.5 7.5 0 0 1 15 0V30"/>'
+            '<path d="M20.5 30v-1.5a7.5 7.5 0 0 1 15 0V30"/>'
+            '<path d="M14.5 20.5h11"/>'
+        ),
+        "doc": (
+            '<path d="M11.5 5h11l7 7v22.5a1 1 0 0 1-1 1H11.5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/>'
+            '<path d="M22.5 5v7h7"/>'
+            '<path d="M15 20h10"/><path d="M15 25h10"/><path d="M15 30h6"/>'
+        ),
+    }
+    d = paths.get(name, "")
+    return (
+        '<svg viewBox="0 0 40 40" width="' + str(size) + '" height="' + str(size) + '" '
+        'fill="none" stroke="currentColor" stroke-width="' + str(stroke) + '" '
+        'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>'
+    )
 
 def render_gauge(ratio, caption=""):
     """進捗バーを自前で描画する。Streamlitの内部DOMに依存しないため確実に色が当たる。"""
@@ -570,15 +625,13 @@ def get_icon_html(file_name, size="1.2em"):
             data = base64.b64encode(f.read()).decode("utf-8")
         return f'<img src="data:image/png;base64,{data}" style="width:{size}; height:{size}; vertical-align:middle; margin-right:8px; border-radius:15%;">'
     except Exception:
-        # 画像が無い場合は何も出さない。記号で埋めると位置がずれる
-        return ""
+        return "✨"
 
 app_icon = get_icon_html("mokipra_icon_official.png")
 
-# チャット用アバター。画像が無い環境では Streamlit 既定の表示に任せる
-#（絵文字を使うと環境ごとに字形と大きさが変わり、行の高さが揃わない）
-AVATAR_AI = "avatar_interviewer.png" if os.path.exists("avatar_interviewer.png") else "assistant"
-AVATAR_USER = "avatar_user.png" if os.path.exists("avatar_user.png") else "user"
+# チャット用アバター（画像が無い環境では従来の絵文字に戻す）
+AVATAR_AI = "avatar_interviewer.png" if os.path.exists("avatar_interviewer.png") else "👔"
+AVATAR_USER = "avatar_user.png" if os.path.exists("avatar_user.png") else "👤"
 
 # ==============================================================================
 # 2. APIキーと各種クライアント設定
@@ -592,12 +645,12 @@ SUPABASE_KEY = get_secret("SUPABASE_KEY", "")
 #   起動直後に分かりやすいメッセージで停止させる。
 if not OPENAI_API_KEY:
     logger.error("OPENAI_API_KEY not configured")
-    st.error("設定エラー：OPENAI_API_KEY が未設定です。.streamlit/secrets.toml を確認してください。")
+    st.error("❌ 設定エラー：OPENAI_API_KEY が未設定です。.streamlit/secrets.toml を確認してください。")
     st.stop()
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     logger.error("Supabase URL/KEY not configured")
-    st.error("設定エラー：SUPABASE_URL または SUPABASE_KEY が未設定です。.streamlit/secrets.toml を確認してください。")
+    st.error("❌ 設定エラー：SUPABASE_URL または SUPABASE_KEY が未設定です。.streamlit/secrets.toml を確認してください。")
     st.stop()
 
 client = OpenAI(api_key=OPENAI_API_KEY)
@@ -682,7 +735,7 @@ APP_URL = get_secret("APP_URL", "http://localhost:8501")
 
 if not STRIPE_PRICE_ID_PRO or "XXX" in STRIPE_PRICE_ID_PRO:
     logger.error("Stripe Price ID (Pro) not properly configured")
-    st.error("Stripe設定エラー：Proプランの Price ID が未設定です。secrets.toml または環境変数 STRIPE_PRICE_ID_PRO を確認してください。")
+    st.error("❌ Stripe設定エラー：Proプランの Price ID が未設定です。secrets.toml または環境変数 STRIPE_PRICE_ID_PRO を確認してください。")
     st.stop()
 
 
@@ -932,7 +985,7 @@ if not st.session_state.user:
 
         if st.button("実行する", type="primary", use_container_width=True):
             if not email or not password:
-                st.error("メールアドレスとパスワードを入力してください。")
+                st.error("⚠️ メールアドレスとパスワードを入力してください。")
             else:
                 with st.spinner("認証中..."):
                     try:
@@ -944,7 +997,7 @@ if not st.session_state.user:
                                 st.session_state.refresh_token = res.session.refresh_token
                                 st.rerun()
                             elif res.user:
-                                st.success("アカウントが作成されました！「ログイン」に切り替えてログインしてください。")
+                                st.success("✅ アカウントが作成されました！「ログイン」に切り替えてログインしてください。")
                         else:
                             res = supabase.auth.sign_in_with_password({"email": email.strip(), "password": password})
                             if res.user and res.session:
@@ -953,9 +1006,9 @@ if not st.session_state.user:
                                 st.session_state.refresh_token = res.session.refresh_token
                                 st.rerun()
                             else:
-                                st.error("メールアドレスまたはパスワードが違います。")
+                                st.error("⚠️ メールアドレスまたはパスワードが違います。")
                     except Exception as e:
-                        st.error(f"認証エラー: {e}")
+                        st.error(f"⚠️ 認証エラー: {e}")
 
     st.markdown("<div style='height: 36px;'></div>", unsafe_allow_html=True)
 
@@ -992,14 +1045,14 @@ today_str = str(date.today())
 if "payment" in st.query_params:
     payment_status = st.query_params.get("payment")
     if payment_status == "success":
-        st.success("ご購入ありがとうございました！")
+        st.success("✅ ご購入ありがとうございました！")
         st.info("プランが更新されています。画面をリロードします...")
         logger.info(f"Payment successful for user {user_id}")
         time.sleep(3)
         st.query_params.clear()
         st.rerun()
     elif payment_status == "cancel":
-        st.warning("決済がキャンセルされました。")
+        st.warning("❌ 決済がキャンセルされました。")
         st.info("決済をやり直す場合は、もう一度プランを選択してください。")
         logger.warning(f"Payment cancelled for user {user_id}")
         st.query_params.clear()
@@ -1059,7 +1112,7 @@ def increment_user_usage(uid):
         supabase.rpc('increment_usage', {'target_user_id': uid}).execute()
     except Exception as e:
         logger.error(f"RPC increment_usage failed for {uid}: {e}")
-        st.caption("回数同期に一時的な遅延が発生しています。")
+        st.caption("ℹ️ 回数同期に一時的な遅延が発生しています。")
 
 def save_interview_history(uid, score, context):
     try:
@@ -1089,7 +1142,19 @@ def create_checkout_session(user_id, plan_type):
     
     price_id = prices.get(plan_type, "")
     current_url = get_secret("APP_URL", "http://localhost:8501")
-    
+
+    # Stripe 側の顧客メールアドレスを Mokipra のアカウントと一致させる。
+    # 渡さない場合、ユーザーは決済画面で別のアドレスを入力でき、あとから
+    # 「どの Stripe 顧客がどのユーザーか」をメールで辿れなくなる。
+    # 渡すと Checkout 上では読み取り専用になるため、ズレが起きない。
+    _extra = {}
+    try:
+        _email = (getattr(st.session_state.user, "email", "") or "").strip()
+        if _email:
+            _extra["customer_email"] = _email
+    except Exception:
+        pass
+
     try:
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
@@ -1111,10 +1176,74 @@ def create_checkout_session(user_id, plan_type):
             },
             success_url=f"{current_url}?payment=success",
             cancel_url=f"{current_url}?payment=cancel",
+            **_extra,
         )
         return session.url, None
     except Exception as e:
         return None, str(e)
+
+
+def create_billing_portal_session(user_id):
+    """
+    Stripe カスタマーポータルの URL を生成する。
+
+    利用規約 第4条で「解約は Stripe のカスタマーポータルよりいつでもご自身で
+    手続き可能です」と明記しているため、有料ユーザーにはこの導線が必須。
+    2026-10-05 時点ではこの導線が存在せず、規約で約束した手段を提供できていなかった。
+
+    返り値: (url, error_message) どちらか一方が None。
+    """
+    api_key = get_secret("STRIPE_SECRET_KEY", "")
+    stripe.api_key = api_key
+
+    if not stripe.api_key:
+        return None, "STRIPE_SECRET_KEY が設定されていません。"
+
+    customer_id = None
+    uid = str(user_id)
+
+    # ① サブスクリプションの metadata から顧客を特定する（最も確実）
+    #    Search のクエリに値を埋め込むため、UUID の形以外は問い合わせない。
+    #    user_id は Supabase 由来でユーザーが自由に入力できる値ではないが、
+    #    文字列をそのままクエリに差し込む形なので、念のため形式を検証する。
+    if len(uid) == 36 and all(c in "0123456789abcdefABCDEF-" for c in uid):
+        try:
+            found = stripe.Subscription.search(
+                query=f"metadata['user_id']:'{uid}'", limit=1
+            )
+            if found.data:
+                customer_id = found.data[0].customer
+        except Exception as e:
+            logger.warning(f"Subscription.search failed for {uid}: {e}")
+
+    # ② 見つからない場合はメールアドレスで引く。
+    #    Stripe の Search API は作成直後の数十秒間ヒットしないことがあるため、
+    #    決済直後にポータルを開こうとした場合の保険として残す。
+    if not customer_id:
+        try:
+            email = (getattr(st.session_state.user, "email", "") or "").strip()
+            if email:
+                customers = stripe.Customer.list(email=email, limit=1)
+                if customers.data:
+                    customer_id = customers.data[0].id
+        except Exception as e:
+            logger.warning(f"Customer.list failed for {uid}: {e}")
+
+    if not customer_id:
+        logger.warning(f"Billing portal: customer not found for user {uid}")
+        return None, "お支払い情報が見つかりませんでした。"
+
+    return_url = get_secret("APP_URL", "http://localhost:8501")
+    try:
+        portal = stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url=return_url,
+        )
+        return portal.url, None
+    except Exception as e:
+        logger.error(f"Billing portal creation failed for user {uid}: {e}")
+        return None, str(e)
+
 
 usage_data = get_user_usage(user_id)
 current_user_plan = usage_data["plan"]
@@ -1167,7 +1296,7 @@ def _gd_open_to_free():
 GD_OPEN_TO_FREE = _gd_open_to_free()
 if _is_test_account:
     logger.info(f"Test plan override applied: user={user_id} plan={current_user_plan}")
-    st.caption(f"テストアカウントとして {current_user_plan} プランで動作しています。")
+    st.caption(f"🧪 テストアカウントとして {current_user_plan} プランで動作しています。")
 
 # プランは Free / Pro の2本に統合した。
 # 旧Maxの契約者が残っていた場合に備え、Max は Pro と同等に扱う。
@@ -1246,6 +1375,34 @@ with st.sidebar:
             if current_user_plan == "Free" and "sb_pro_url" in st.session_state:
                 st.link_button("Proプラン  480円 / 月", st.session_state["sb_pro_url"], type="primary", use_container_width=True)
             
+    # --- 有料ユーザー向け：お支払いと解約の管理 ---
+    #   利用規約 第4条で「解約は Stripe のカスタマーポータルよりいつでもご自身で
+    #   手続き可能」と約束しているため、この導線は必須。
+    #   判定に current_user_plan ではなく DB の値（usage_data）を使うのは、
+    #   TEST_PRO_EMAILS によるテスト用の上書きで Pro になっているだけの
+    #   アカウントには Stripe の顧客が存在せず、毎回エラー表示になるため。
+    if usage_data["plan"] in ("Pro", "Max"):
+        st.markdown("---")
+        st.markdown('<p class="mkp-eyebrow" style="margin-top:14px;">BILLING</p>', unsafe_allow_html=True)
+
+        # ポータルのURLは短時間で失効する。一方、毎回作り直すと Streamlit の
+        # 再実行のたびに Stripe API を呼ぶことになり、操作のたびに待たされる。
+        # 10分だけ使い回す。
+        _PORTAL_TTL_SEC = 600
+        _portal = st.session_state.get("billing_portal")
+        if not _portal or (time.time() - _portal.get("ts", 0)) > _PORTAL_TTL_SEC:
+            with st.spinner("お支払い情報を確認中..."):
+                _portal_url, _portal_err = create_billing_portal_session(user_id)
+            _portal = {"url": _portal_url, "err": _portal_err, "ts": time.time()}
+            st.session_state["billing_portal"] = _portal
+
+        if _portal.get("url"):
+            st.link_button("お支払い・解約の管理", _portal["url"],
+                           use_container_width=True, icon=":material/receipt_long:")
+            st.caption("解約した場合も、お支払い済みの期間が終わるまでご利用いただけます。")
+        else:
+            st.caption("お支払い情報を読み込めませんでした。お手数ですが運営までご連絡ください。")
+
     st.markdown("---")
     with st.expander("利用規約・法的情報", icon=":material/gavel:"):
         st.caption("各文書は公式サイトに掲載しています。別ウィンドウで開きます。")
@@ -1260,8 +1417,8 @@ with st.sidebar:
 # ====================================================
 if st.session_state.page_state == "setup":
     if current_daily_usage >= current_limit:
-        st.error("本日の面接練習回数の上限に達しました。明日リセットされます。")
-        st.info("Proプランなら1日10回まで受講可能！アドバイスを踏まえて今すぐリベンジできます！")
+        st.error("⚠️ 本日の面接練習回数の上限に達しました。明日リセットされます。")
+        st.info("💡 Proプランなら1日10回まで受講可能！アドバイスを踏まえて今すぐリベンジできます！")
         
         st.markdown("---")
         display_terms_and_checkbox("agree_setup")
@@ -1277,7 +1434,7 @@ if st.session_state.page_state == "setup":
                                st.session_state["setup_pro_url"],
                                type="primary", use_container_width=True)
             else:
-                st.error("決済リンクの準備に失敗しました。")
+                st.error("❌ 決済リンクの準備に失敗しました。")
             
     else:
         st.markdown("""
@@ -1392,14 +1549,14 @@ if st.session_state.page_state == "setup":
                     <td style="padding: 10px; font-weight:bold;">1回</td>
                     <td style="padding: 10px;">4回 (ショート)</td>
                     <td style="padding: 10px;">標準的な深掘り</td>
-                    <td style="padding: 10px; color:#64748b;">""" + lucide.icon("minus", size=15) + """ 講評のみ</td>
+                    <td style="padding: 10px; color:#64748b;">❌ 講評のみ</td>
                 </tr>
                 <tr style="background: var(--ai-wash);">
                     <td style="padding: 10px; font-weight:bold; color:var(--ai);">Pro (480円)</td>
                     <td style="padding: 10px; color:var(--ai); font-weight:bold;">5回</td>
                     <td style="padding: 10px; color:var(--ai); font-weight:bold;">10回 (本格面接)</td>
                     <td style="padding: 10px; color:var(--ai); font-weight:bold;">性格変更・ES読込・GD・ES添削</td>
-                    <td style="padding: 10px; color:var(--ai); font-weight:bold;">""" + lucide.icon("check", size=15) + """ 全回答リライト付き</td>
+                    <td style="padding: 10px; color:var(--ai); font-weight:bold;">✅ 全回答リライト付き</td>
                 </tr>
             </table>
         </div>
@@ -1469,24 +1626,24 @@ if st.session_state.page_state == "setup":
         
         col_m3, col_m4 = st.columns(2)
         with col_m3:
-            selected_tone = st.radio("面接官の性格", ["標準", "優しい（寄り添い型）", "超厳格（圧迫）"], disabled=not is_max)
+            selected_tone = st.radio("🎭 面接官の性格", ["標準", "優しい（寄り添い型）", "超厳格（圧迫）"], disabled=not is_max)
         
-        uploaded_file = st.file_uploader("エントリーシート・研究計画書 (PDF)", type=["pdf"], disabled=not is_max)
+        uploaded_file = st.file_uploader("📄 エントリーシート・研究計画書 (PDF)", type=["pdf"], disabled=not is_max)
         if is_max:
-            st.caption("**セキュリティ・容量について**: アップロードされたPDFはメモリ上で一時的に処理され、保存されません。また、APIコストと処理遅延を防ぐため、AIへの読み込みは先頭から約4000文字に自動制限されます。機密情報は黒塗りを推奨します。")
-            st.info("**ヒント**: 研究計画書やESを添付すると、AIが内容を分析し、実際の面接官や教授陣のように『研究内容』や『過去の経験』について深く鋭い質問を行います！")
+            st.caption("🔒 **セキュリティ・容量について**: アップロードされたPDFはメモリ上で一時的に処理され、保存されません。また、APIコストと処理遅延を防ぐため、AIへの読み込みは先頭から約4000文字に自動制限されます。機密情報は黒塗りを推奨します。")
+            st.info("💡 **ヒント**: 研究計画書やESを添付すると、AIが内容を分析し、実際の面接官や教授陣のように『研究内容』や『過去の経験』について深く鋭い質問を行います！")
         
         es_pdf_text = ""
         if uploaded_file is not None and is_max:
             with st.spinner("PDFを解析・確認中..."):
                 es_pdf_text = extract_text_from_pdf(uploaded_file)
                 if es_pdf_text and validate_document_content(es_pdf_text):
-                    st.success("書類(PDF)の読み込みと内容確認が完了しました！")
+                    st.success("✅ 書類(PDF)の読み込みと内容確認が完了しました！")
                 else:
-                    st.error("有効なエントリーシートや履歴書(PDF)ではない可能性があります。")
+                    st.error("⚠️ 有効なエントリーシートや履歴書(PDF)ではない可能性があります。")
 
-        es_manual_text = st.text_area("またはテキストで直接入力（PDFがない場合）", height=100, disabled=not is_max, placeholder="【Proプラン限定】自己PRや研究内容を入力")
-        if not is_max: st.caption("Proプランにアップグレードすると、面接官の性格変更や書類(PDF)の読み込み機能が解放されます。")
+        es_manual_text = st.text_area("✍️ またはテキストで直接入力（PDFがない場合）", height=100, disabled=not is_max, placeholder="【Proプラン限定】自己PRや研究内容を入力")
+        if not is_max: st.caption("🔒 Proプランにアップグレードすると、面接官の性格変更や書類(PDF)の読み込み機能が解放されます。")
         st.markdown("</div>", unsafe_allow_html=True)
     
         if st.button("面接をスタートする", type="primary", use_container_width=True, icon=":material/play_arrow:"):
@@ -1599,10 +1756,10 @@ if st.session_state.page_state == "setup":
                     #   面接が始まっていないのに回数だけ消費されてしまうため。
                     increment_user_usage(user_id)
                 except openai.RateLimitError:
-                    st.error("アクセスが集中しておりAIが応答できませんでした。数秒待ってからもう一度お試しください。")
+                    st.error("⚠️ アクセスが集中しておりAIが応答できませんでした。数秒待ってからもう一度お試しください。")
                     st.stop()
                 except Exception as e:
-                    st.error(f"エラーが発生しました: {e}")
+                    st.error(f"⚠️ エラーが発生しました: {e}")
                     st.stop()
                 
             st.session_state.start_time = time.time()
@@ -1762,12 +1919,12 @@ elif st.session_state.page_state == "interview":
     with center_col:
         selected_tab = option_menu(
             menu_title=None,
-            options=["面接セッション", "マイページ (成績)"],
+            options=["🎙️ 面接セッション", "📈 マイページ (成績)"],
             icons=["mic-fill", "graph-up-arrow"],
             default_index=0, orientation="horizontal"
         )
 
-        if selected_tab == "面接セッション":
+        if selected_tab == "🎙️ 面接セッション":
             st.markdown('<div class="glass-card">', unsafe_allow_html=True)
             audio_idx = 0
             for msg in st.session_state.messages:
@@ -1780,7 +1937,7 @@ elif st.session_state.page_state == "interview":
                         if msg["role"] == "assistant" and audio_idx < len(st.session_state.audio_history):
                             is_latest = (audio_idx == len(st.session_state.audio_history) - 1)
                             should_autoplay = is_latest and st.session_state.autoplay_latest
-                            st.caption("もう一度聞く場合は再生ボタンを押してください")
+                            st.caption("🔊 もう一度聞く場合は再生ボタンを押してください")
                             st.audio(st.session_state.audio_history[audio_idx], format="audio/mp3", autoplay=should_autoplay)
                             audio_idx += 1
             
@@ -1811,13 +1968,13 @@ elif st.session_state.page_state == "interview":
                 # ---- 入力方法の切り替え（音声 / テキスト）----
                 answer_mode = st.radio(
                     "回答方法",
-                    ["音声で回答", "テキストで回答"],
+                    ["🎤 音声で回答", "⌨️ テキストで回答"],
                     horizontal=True,
                     key=f"answer_mode_{st.session_state.turn_count}",
                     label_visibility="collapsed",
                 )
 
-                if answer_mode == "音声で回答":
+                if answer_mode == "🎤 音声で回答":
                     # st.audio_input はマイクのアイコンだけが置かれる見た目で、
                     # 何を押せば始まるのか伝わらない。明示的な開始ボタンを前に置く。
                     _rec_key = f"rec_open_{st.session_state.turn_count}"
@@ -1863,7 +2020,7 @@ elif st.session_state.page_state == "interview":
                             st.session_state.last_audio_digest = audio_digest
                             if stt_error:
                                 st.session_state.pending_transcript = ""
-                                st.warning(f"{stt_error}")
+                                st.warning(f"⚠️ {stt_error}")
                             else:
                                 st.session_state.pending_transcript = transcribed[:MAX_INPUT_CHARS]
 
@@ -1886,7 +2043,7 @@ elif st.session_state.page_state == "interview":
                                     input_method = "voice"
                                     st.session_state.has_voice_input = True
                                 else:
-                                    st.warning("回答が空です。録音し直すか、テキストを入力してください。")
+                                    st.warning("⚠️ 回答が空です。録音し直すか、テキストを入力してください。")
                         with col_redo:
                             if st.button("録り直す", use_container_width=True, icon=":material/mic:",
                                          key=f"redo_voice_{st.session_state.turn_count}"):
@@ -1902,7 +2059,7 @@ elif st.session_state.page_state == "interview":
                 if user_text:
                     if len(user_text) > MAX_INPUT_CHARS:
                         user_text = user_text[:MAX_INPUT_CHARS]
-                        st.warning(f"セキュリティ保護のため、入力は{MAX_INPUT_CHARS}文字に制限されました。")
+                        st.warning(f"⚠️ セキュリティ保護のため、入力は{MAX_INPUT_CHARS}文字に制限されました。")
 
                     elapsed_time = int(time.time() - st.session_state.start_time)
                     st.session_state.turn_count += 1
@@ -1913,7 +2070,7 @@ elif st.session_state.page_state == "interview":
                     st.session_state.messages.append({"role": "user", "content": f"{user_text} {meta_info}"})
 
                     with st.chat_message("user", avatar=AVATAR_USER):
-                        st.markdown(f"{user_text} \n\n*(回答時間 {elapsed_time}秒)*")
+                        st.markdown(f"{user_text} \n\n*(⏱️ タイム: {elapsed_time}秒)*")
 
                     with st.chat_message("assistant", avatar=AVATAR_AI):
                         with st.spinner("面接官が回答を考案中..."):
@@ -1938,18 +2095,18 @@ elif st.session_state.page_state == "interview":
                                 st.rerun()
                                 
                             except openai.RateLimitError:
-                                st.warning("サーバーが大変混み合っています。少し待ってからお試しください。")
+                                st.warning("⚠️ サーバーが大変混み合っています。少し待ってからお試しください。")
                                 st.session_state.turn_count -= 1
                                 st.session_state.messages.pop()
                                 st.stop()
                             except Exception as e:
-                                st.warning("予期せぬエラーが発生しました。リトライしてください。")
+                                st.warning("⚠️ 予期せぬエラーが発生しました。リトライしてください。")
                                 logger.error(f"Interview chat error: {e}")
                                 st.session_state.turn_count -= 1
                                 st.session_state.messages.pop()
                                 st.stop()
 
-        elif selected_tab == "マイページ (成績)":
+        elif selected_tab == "📈 マイページ (成績)":
             st.markdown('<div class="glass-card">', unsafe_allow_html=True)
             st.markdown('<p class="mkp-eyebrow" style="margin-top:0;">HISTORY</p><h4 style="margin:0 0 12px;">スコアの推移</h4>', unsafe_allow_html=True)
             db_history = get_interview_history(user_id)
@@ -2073,7 +2230,7 @@ elif st.session_state.page_state == "result":
                 
                 is_grad = "大学院" in st.session_state.get("interview_context", "") or "推薦" in st.session_state.get("interview_context", "")
 
-                speaking_eval_instruction = "\n### 話し方・回答スピードの評価\n- （回答時間と文字数から評価し、テンポや要約力を厳しく診断）" if st.session_state.get("has_voice_input", False) else "\n### 回答スピード・思考時間の評価\n- （記録された回答時間から、詰まりや冗長さをシビアに評価）"
+                speaking_eval_instruction = "\n### 🗣️ 話し方・回答スピードの評価\n- （回答時間と文字数から評価し、テンポや要約力を厳しく診断）" if st.session_state.get("has_voice_input", False) else "\n### ⏱️ 回答スピード・思考時間の評価\n- （記録された回答時間から、詰まりや冗長さをシビアに評価）"
 
                 if current_user_plan == "Free":
                     format_instruction = """
@@ -2180,23 +2337,23 @@ elif st.session_state.page_state == "result":
                     eval_text += """
 <div style="position: relative; margin-top: 25px; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background: #f8fafc; overflow: hidden;">
     <div style="filter: blur(6px); opacity: 0.5; user-select: none; pointer-events: none;">
-        <h3 style="color: #0f172a; margin-top: 0; font-size: 1.1rem;">""" + lucide.icon("star", size=19) + """ 良かった点（続き）</h3>
+        <h3 style="color: #0f172a; margin-top: 0; font-size: 1.1rem;">🌟 良かった点（続き）</h3>
         <ul style="color: #334155; font-weight: bold; font-size: 0.9rem;">
             <li>【論理展開】結論から述べるPREP法が徹底されており、非常に説得力がありました。</li>
             <li>【具体性】過去の経験を交えて語ることで、独自性がアピールできています。</li>
         </ul>
-        <h3 style="color: #0f172a; font-size: 1.1rem;">""" + lucide.icon("trending-up", size=19) + """ 細部に着目した本格改善アドバイス</h3>
+        <h3 style="color: #0f172a; font-size: 1.1rem;">📈 細部に着目した本格改善アドバイス</h3>
         <ul style="color: #334155; font-weight: bold; font-size: 0.9rem;">
             <li>【言葉遣い】「えっと」「あの」といったフィラーが多く、自信がない印象を与えています。</li>
             <li>【深掘り不足】質問に対し、表面的な回答に留まっています。もっと多角的な観点が必要です。</li>
         </ul>
-        <h3 style="color: #0f172a; font-size: 1.1rem;">""" + lucide.icon("file-pen", size=19) + """ プロの模範解答（回答リライト）</h3>
+        <h3 style="color: #0f172a; font-size: 1.1rem;">✨ プロの模範解答（回答リライト）</h3>
         <p style="color: #334155; font-weight: bold; font-size: 0.9rem;"><strong>対象の回答:</strong> 「志望動機は、御社の理念に共感したからです...」</p>
         <p style="color: #334155; font-weight: bold; font-size: 0.9rem;"><strong>プロのリライト:</strong><br>「私が貴社を志望する理由は〇〇です。前職での〇〇の経験から...」</p>
     </div>
     <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; width: 95%; z-index: 10;">
         <div style="background: rgba(255, 255, 255, 0.95); padding: 20px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); border: 2px solid #cbd5e1;">
-            <h4 style="margin: 0 0 10px 0; color: #1e3a8a; font-size: 1.1rem;">""" + lucide.icon("lock", size=18) + """ 続きは Proプラン限定</h4>
+            <h4 style="margin: 0 0 10px 0; color: #1e3a8a; font-size: 1.1rem;">🔒 続きは Proプラン限定</h4>
             <p style="margin: 0; font-size: 0.9rem; color: #475569; font-weight: bold;">
                 隠された「2つ目以降の良かった点・改善点」と、<br>
                 プロによる【内定レベルの回答リライト】を見るには<br>
@@ -2214,10 +2371,10 @@ elif st.session_state.page_state == "result":
                 save_interview_history(user_id, score, st.session_state.interview_context)
             
             except openai.RateLimitError:
-                st.error("アクセスが集中しているため、評価レポートの作成に失敗しました。時間をおいて再試行してください。")
+                st.error("⚠️ アクセスが集中しているため、評価レポートの作成に失敗しました。時間をおいて再試行してください。")
                 st.stop()
             except Exception:
-                st.error("通信エラーが発生しました。もう一度お試しください。")
+                st.error("⚠️ 通信エラーが発生しました。もう一度お試しください。")
                 st.stop()
 
     _score = st.session_state.get("final_score")
@@ -2267,7 +2424,7 @@ elif st.session_state.page_state == "result":
 
     if current_user_plan == "Free":
         st.markdown("---")
-        st.warning("**アドバイスを踏まえて、今すぐ次の面接でリベンジしてみませんか？**\n\nProプランにアップグレードすると、**1日5回まで練習可能**。グループディスカッション練習、エントリーシート添削、書類(PDF)を踏まえた面接も使えます！")
+        st.warning("💡 **アドバイスを踏まえて、今すぐ次の面接でリベンジしてみませんか？**\n\nProプランにアップグレードすると、**1日5回まで練習可能**。グループディスカッション練習、エントリーシート添削、書類(PDF)を踏まえた面接も使えます！")
         
         display_terms_and_checkbox("agree_result")
 
